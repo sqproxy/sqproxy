@@ -1,0 +1,19 @@
+{
+    "defaults": {
+        "server-addr": "192.168.1.1",
+        "bind-addr": "192.168.1.1",
+        "default_cache_lifetime": 5
+    },
+    "csgo": {
+        "ServerName<27015>":{
+            "proxy-port":27815,
+            "server-port":27016
+        }
+    },
+    "common": {
+        "ServerName<27016>":{
+            "proxy-port":27816,
+            "server-port":27016
+        }
+    }
+}

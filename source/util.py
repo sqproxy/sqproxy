@@ -1,0 +1,223 @@
+# -*- coding: utf-8 -*-
+# Copyright (C) 2014 Oliver Ainsworth
+
+import sys
+
+
+class Platform(object):
+    """A Source server platform identifier
+
+    This class provides utilities for representing Source server platforms
+    as returned from a A2S_INFO request. Each platform is ultimately
+    represented by one of the following integers:
+
+    +-----+----------+
+    | ID  | Platform |
+    +=====+==========+
+    | 108 | Linux    |
+    +-----+----------+
+    | 109 | Mac OS X |
+    +-----+----------+
+    | 111 | Mac OS X |
+    +-----+----------+
+    | 119 | Windows  |
+    +-----+----------+
+    """
+
+    def __init__(self, value):
+        """Initialise the platform identifier
+
+        The given ``value`` will be mapped to a numeric identifier. If the
+        value is already an integer it must then it must exist in the table
+        above else ValueError is returned.
+
+        If ``value`` is a one character long string then it's ordinal value
+        as given by ``ord()`` is used. Alternately the string can be either
+        of the following:
+
+        * Linux
+        * Mac OS X
+        * Windows
+        """
+        if isinstance(value, str):
+            if len(value) == 1:
+                value = ord(value)
+            else:
+                value = {
+                    "linux": 108,
+                    "mac os x": 111,
+                    "windows": 119,
+                }.get(value.lower())
+                if value is None:
+                    raise ValueError("Couldn't convert string {!r} to valid "
+                                     "platform identifier".format(value))
+        if value not in {108, 109, 111, 119}:
+            raise ValueError("Invalid platform identifier {!r}".format(value))
+        self.value = value
+
+    def __repr__(self):
+        return "<{self.__class__.__name__} " \
+               "{self.value} '{self}'>".format(self=self)
+
+    def __unicode__(self):
+        return {
+            108: "Linux",
+            109: "Mac OS X",
+            111: "Mac OS X",
+            119: "Windows",
+        }[self.value]
+
+    def __str__(self):
+        return self.__unicode__()
+
+    def __bytes__(self):
+        return self.__unicode__().encode(sys.getdefaultencoding())
+
+    def __int__(self):
+        return self.value
+
+    def __eq__(self, other):
+        """Check for equality between two platforms
+
+        If ``other`` is not a Platform instance then an attempt is made to
+        convert it to one using same approach as :meth:`__init__`. This means
+        platforms can be compared against integers and strings. For example:
+
+        .. code:: pycon
+
+            >>>Platform(108) == "linux"
+            True
+            >>>Platform(109) == 109
+            True
+            >>>Platform(119) == "w"
+            True
+
+        Despite the fact there are two numerical identifers for Mac (109 and
+        111) comparing either of them together will yield ``True``.
+
+        .. code:: pycon
+
+            >>>Platform(109) == Platform(111)
+            True
+        """
+        if not isinstance(other, Platform):
+            other = Platform(other)
+        if self.value == 109 or self.value == 111:
+            return other.value == 109 or other.value == 111
+        else:
+            return self.value == other.value
+
+    @property
+    def os_name(self):
+        """Convenience mapping to names returned by ``os.name``"""
+        return {
+            108: "posix",
+            109: "posix",
+            111: "posix",
+            119: "nt",
+        }[self.value]
+
+
+Platform.LINUX = Platform(108)
+Platform.MAC_OS_X = Platform(111)
+Platform.WINDOWS = Platform(119)
+
+
+class ServerType(object):
+    """A Source server platform identifier
+
+    This class provides utilities for representing Source server types
+    as returned from a A2S_INFO request. Each server type is ultimately
+    represented by one of the following integers:
+
+    +-----+---------------+
+    | ID  | Server type   |
+    +=====+===============+
+    | 100 | Dedicated     |
+    +-----+---------------+
+    | 108 | Non-dedicated |
+    +-----+---------------+
+    | 112 | SourceTV      |
+    +-----+---------------+
+    """
+
+    def __init__(self, value):
+        """Initialise the server type identifier
+
+        The given ``value`` will be mapped to a numeric identifier. If the
+        value is already an integer it must then it must exist in the table
+        above else ValueError is returned.
+
+        If ``value`` is a one character long string then it's ordinal value
+        as given by ``ord()`` is used. Alternately the string can be either
+        of the following:
+
+        * Dedicated
+        * Non-Dedicated
+        * SourceTV
+        """
+        if isinstance(value, str):
+            if len(value) == 1:
+                value = ord(value)
+            else:
+                value = {
+                    "dedicated": 100,
+                    "non-dedicated": 108,
+                    "sourcetv": 112,
+                }.get(value.lower())
+                if value is None:
+                    raise ValueError("Couldn't convert string {!r} to valid "
+                                     "server type identifier".format(value))
+        if value not in {100, 108, 112}:
+            raise ValueError(
+                "Invalid server type identifier {!r}".format(value))
+        self.value = value
+
+    def __repr__(self):
+        return "<{self.__class__.__name__} " \
+               "{self.value} '{self}'>".format(self=self)
+
+    def __unicode__(self):
+        return {
+            100: "Dedicated",
+            108: "Non-Dedicated",
+            112: "SourceTV",
+        }[self.value]
+
+    def __str__(self):
+        return self.__unicode__()
+
+    def __bytes__(self):
+        return self.__unicode__().encode(sys.getdefaultencoding())
+
+    def __int__(self):
+        return self.value
+
+    def __eq__(self, other):
+        """Check for equality between two server types
+
+        If ``other`` is not a ServerType instance then an attempt is made to
+        convert it to one using same approach as :meth:`.__init__`. This means
+        server types can be compared against integers and strings. For example:
+
+        .. code:: pycon
+
+            >>>Server(100) == "dedicated"
+            True
+            >>>Platform(108) == 108
+            True
+            >>>Platform(112) == "p"
+            True
+        """
+        if not isinstance(other, ServerType):
+            other = ServerType(other)
+        return self.value == other.value
+
+    @property
+    def char(self):
+        return chr(self.value)
+
+
+ServerType.DEDICATED = ServerType(100)
+ServerType.NON_DEDICATED = ServerType(108)
+ServerType.SOURCETV = ServerType(112)
