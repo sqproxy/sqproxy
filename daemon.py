@@ -544,24 +544,24 @@ async def main():
 def _startup():
     from contextlib import suppress
 
-    # pid_fpath, *_ = __file__.rsplit('.', 1)
-    # pid_fpath += '.pid'
-    #
-    # ptrack = PIDTracker.from_file_path(pid_fpath)
-    # if ptrack.is_running():
-    #     print("Daemon already running!")
-    #     return
-    #
-    # with ptrack.track():
-    #     if uvloop is not None:
-    #         print("uvloop speedups enabled")
-    #         asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
-    #     elif PY_35:
-    #         print(
-    #             "You can install uvloop to increase performance: \n"
-    #             "# apt-get install python3-dev\n"
-    #             "# python3 -m pip install uvloop"
-    #         )
+    pid_fpath, *_ = __file__.rsplit('.', 1)
+    pid_fpath += '.pid'
+
+    ptrack = PIDTracker.from_file_path(pid_fpath)
+    if ptrack.is_running():
+        print("Daemon already running!")
+        return
+
+    with ptrack.track():
+        if uvloop is not None:
+            print("uvloop speedups enabled")
+            asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+        elif PY_35:
+            print(
+                "You can install uvloop to increase performance: \n"
+                "# apt-get install python3-dev\n"
+                "# python3 -m pip install uvloop"
+            )
 
     loop = asyncio.get_event_loop()
     with suppress(KeyboardInterrupt, SystemExit):
