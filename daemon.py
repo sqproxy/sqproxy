@@ -20,16 +20,14 @@ from pid_tracker import PIDTracker
 
 PY_35 = sys.version_info >= (3, 5)
 
-uvloop = None
 
-if PY_35:
-    try:
-        import uvloop
-    except ImportError:
-        pass
+try:
+    import uvloop
+except ImportError:
+    uvloop = None
 
 
-__version__ = '0.14.0'
+__version__ = '0.15.0'
 
 
 logdir = pathlib.Path(__file__).parent / 'logs'
@@ -59,19 +57,18 @@ def infinity_sntl(_):
     return False
 
 
-@asyncio.coroutine
-def repeat_until(func, *, sentinel=infinity_sntl, period=1.0):
+async def repeat_until(func, *, sentinel=infinity_sntl, period=1.0):
     while True:
 
         if asyncio.iscoroutinefunction(func):
-            res = yield from func()
+            res = await func()
         else:
             res = func()
 
         if sentinel(res):
             return res
 
-        yield from asyncio.sleep(period)
+        await asyncio.sleep(period)
 
 
 class CallbackProtocol(asyncio.DatagramProtocol):
@@ -111,13 +108,14 @@ class ProxyServer:
     A2S_EMPTY_CHALLENGE = -1
     FRAGMENT_MAX_SIZE = 1200
 
-    def __init__(self, local_addr, remote_addr, default_cache_lifetime=30):
+    def __init__(self, local_addr, remote_addr, default_cache_lifetime=30, server_transport_lifetime=None):
         logger = logging.getLogger('%s:%s' % remote_addr)
 
         self.logger = logger
         self.local_addr = local_addr
         self.remote_addr = remote_addr
         self.default_cache_lifetime = default_cache_lifetime
+        self.server_transport_lifetime = server_transport_lifetime
 
         self.resp_cache = {}
         self.fragments = pylru.lrucache(size=1024)
@@ -130,6 +128,28 @@ class ProxyServer:
 
         self._client_transport = None
         self._server_transport = None
+
+    @property
+    def loop(self):
+        return asyncio.get_event_loop()
+
+    async def _create_server_transport(self) -> asyncio.BaseTransport:
+        transport, _ = await self.loop.create_datagram_endpoint(
+            lambda: CallbackProtocol(self.on_server_response, logger=self.logger),
+            remote_addr=self.remote_addr
+        )  # WARN: reference cycle
+
+        return transport
+
+    async def _recreate_server_transport(self):
+        old_server_transport = self._server_transport
+
+        self._server_transport = await self._create_server_transport()
+
+        if old_server_transport is not None:
+            old_server_transport.close()
+
+        return self._server_transport
 
     def _decode(self, packet, msg_classes):
         header = source.messages.Header.decode(packet)
@@ -233,19 +253,19 @@ class ProxyServer:
         # Send requests to remote server (for update internal caches)
         # Response will be automatically handled by `on_server_response`
         return [
-            asyncio.async(repeat_until(
+            asyncio.ensure_future(repeat_until(
                 lambda: self.send_to_server(
                     source.messages.InfoRequest().encode(nosplit_header=True),
                 ),
                 period=self.default_cache_lifetime,
             )),
-            asyncio.async(repeat_until(
+            asyncio.ensure_future(repeat_until(
                 lambda: self.send_to_server(
                     source.messages.RulesRequest().encode(challenge=self.a2s_challenge, nosplit_header=True),
                 ),
                 period=self.default_cache_lifetime,
             )),
-            asyncio.async(repeat_until(
+            asyncio.ensure_future(repeat_until(
                 lambda: self.send_to_server(
                     source.messages.PlayersRequest().encode(
                         challenge=self.a2s_challenge, nosplit_header=True,
@@ -345,32 +365,42 @@ class ProxyServer:
         if 'default_cache_lifetime' in cfg:
             settings['default_cache_lifetime'] = int(cfg['default_cache_lifetime'])
 
+        if 'server_transport_lifetime' in cfg:
+            settings['server_transport_lifetime'] = int(cfg['server_transport_lifetime'])
+
         return cls(**settings)
 
     def stop(self):
         self.stopped = True
 
-    @asyncio.coroutine
-    def run(self):
-        loop = asyncio.get_event_loop()
+    async def run(self):
+        loop = self.loop
 
-        self._client_transport, _ = yield from loop.create_datagram_endpoint(
+        self._server_transport = await self._create_server_transport()
+
+        client_transport, _ = await loop.create_datagram_endpoint(
             lambda: CallbackProtocol(self.on_client_request, logger=self.logger, loop=loop),
             local_addr=self.local_addr
-        )  # WARN: reference cycle
-        self._server_transport, _ = yield from loop.create_datagram_endpoint(
-            lambda: CallbackProtocol(self.on_server_response, logger=self.logger, loop=loop),
-            remote_addr=self.remote_addr
-        )  # WARN: reference cycle
+        )
+
+        recreate_server_transport_task = None
+        if self.server_transport_lifetime is not None:
+            recreate_server_transport_task = asyncio.ensure_future(
+                repeat_until(self._recreate_server_transport, period=self.server_transport_lifetime)
+            )
+            recreate_server_transport_task.add_done_callback(lambda fut: log_future_exception(fut, self.logger))
 
         tasks = self.get_tasks()
         while not self.stopped:
-            yield from asyncio.wait(tasks, timeout=1)
+            await asyncio.wait(tasks, timeout=1)
 
         for t in tasks:
             t.cancel()
 
-        self._client_transport.close()
+        if recreate_server_transport_task is not None:
+            recreate_server_transport_task.cancel()
+
+        client_transport.close()
         self._server_transport.close()
 
 
@@ -388,12 +418,11 @@ class MasterServer:
     def _create_tasks(self):
         return []
 
-    @asyncio.coroutine
-    def run(self):
+    async def run(self):
         tasks = []
 
         for server in self._servers:
-            task = asyncio.async(server.run())
+            task = asyncio.ensure_future(server.run())
             task.add_done_callback(lambda fut: log_future_exception(fut, server.logger))
 
             tasks.append(task)
@@ -401,12 +430,12 @@ class MasterServer:
         tasks.extend(self._create_tasks())
 
         while not self.stopped:
-            yield from asyncio.wait(tasks, timeout=1)
+            await asyncio.wait(tasks, timeout=1)
 
         for server in self._servers:
             server.stop()
 
-        yield from asyncio.wait(tasks, timeout=1)
+        await asyncio.wait(tasks, timeout=1)
 
         for t in tasks:
             t.cancel()
@@ -445,12 +474,11 @@ class CSGOMasterServer(MasterServer):
 
         self._aggregator = aggregator
 
-    @asyncio.coroutine
-    def run(self):
+    async def run(self):
         for server in self._servers:
             server.aggregator = self._aggregator
 
-        yield from super().run()
+        await super().run()
 
     def get_stats(self):
         return (
@@ -471,8 +499,7 @@ def log_future_exception(future, logger):
         logger.info("Task done!")
 
 
-@asyncio.coroutine
-def main():
+async def main():
     from config import config
 
     csgo_master_server = None
@@ -487,7 +514,7 @@ def main():
             os.system('clear')
             print(csgo_master_server.get_stats())
 
-        print_stats_task = asyncio.async(repeat_until(
+        print_stats_task = asyncio.ensure_future(repeat_until(
             print_stats,
             period=5,
         ))
@@ -500,7 +527,7 @@ def main():
         tasks.append(common_master_server.run())
 
     try:
-        yield from asyncio.wait(tasks)
+        await asyncio.wait(tasks)
     finally:
         print("Stopping proxy servers...")
 
@@ -517,28 +544,28 @@ def main():
 def _startup():
     from contextlib import suppress
 
-    pid_fpath, *_ = __file__.rsplit('.', 1)
-    pid_fpath += '.pid'
+    # pid_fpath, *_ = __file__.rsplit('.', 1)
+    # pid_fpath += '.pid'
+    #
+    # ptrack = PIDTracker.from_file_path(pid_fpath)
+    # if ptrack.is_running():
+    #     print("Daemon already running!")
+    #     return
+    #
+    # with ptrack.track():
+    #     if uvloop is not None:
+    #         print("uvloop speedups enabled")
+    #         asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+    #     elif PY_35:
+    #         print(
+    #             "You can install uvloop to increase performance: \n"
+    #             "# apt-get install python3-dev\n"
+    #             "# python3 -m pip install uvloop"
+    #         )
 
-    ptrack = PIDTracker.from_file_path(pid_fpath)
-    if ptrack.is_running():
-        print("Daemon already running!")
-        return
-
-    with ptrack.track():
-        if uvloop is not None:
-            print("uvloop speedups enabled")
-            asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
-        elif PY_35:
-            print(
-                "You can install uvloop to increase performance: \n"
-                "# apt-get install python3-dev\n"
-                "# python3 -m pip install uvloop"
-            )
-
-        loop = asyncio.get_event_loop()
-        with suppress(KeyboardInterrupt, SystemExit):
-            loop.run_until_complete(main())
+    loop = asyncio.get_event_loop()
+    with suppress(KeyboardInterrupt, SystemExit):
+        loop.run_until_complete(asyncio.ensure_future(main()))
 
 
 if __name__ == '__main__':
