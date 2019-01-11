@@ -5,6 +5,9 @@
         "default_cache_lifetime": 5
     },
     "csgo": {
+        "defaults": {
+            "server_transport_lifetime": 10
+        },
         "ServerName<27015>":{
             "proxy-port":27815,
             "server-port":27016
