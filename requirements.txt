@@ -1,2 +1,2 @@
 pylru==1.2.0
-uvloop==0.11.3
+uvloop==0.13.0
