@@ -12,10 +12,10 @@ import itertools
 
 import pylru
 
-import stats
-import source.messages
+from . import stats
+from .source import messages
 
-from pid_tracker import PIDTracker
+from .pid_tracker import PIDTracker
 
 
 PY_35 = sys.version_info >= (3, 5)
@@ -25,9 +25,6 @@ try:
     import uvloop
 except ImportError:
     uvloop = None
-
-
-__version__ = '0.15.0'
 
 
 logdir = pathlib.Path(__file__).parent / 'logs'
@@ -152,7 +149,7 @@ class ProxyServer:
         return self._server_transport
 
     def _decode(self, packet, msg_classes):
-        header = source.messages.Header.decode(packet)
+        header = messages.Header.decode(packet)
         packet = header.raw_tail
 
         for cls in msg_classes:
@@ -165,18 +162,18 @@ class ProxyServer:
     @classmethod
     def _get_request_msg_classes(cls):
         return [
-            source.messages.InfoRequest,
-            source.messages.PlayersRequest,
-            source.messages.RulesRequest,
+            messages.InfoRequest,
+            messages.PlayersRequest,
+            messages.RulesRequest,
         ]
 
     @classmethod
     def _get_response_msg_classes(cls):
         return [
-            source.messages.InfoResponse,
-            source.messages.PlayersResponse,
-            source.messages.RulesResponse,
-            source.messages.GetChallengeResponse,
+            messages.InfoResponse,
+            messages.PlayersResponse,
+            messages.RulesResponse,
+            messages.GetChallengeResponse,
         ]
 
     def decode_request(self, packet):
@@ -186,11 +183,11 @@ class ProxyServer:
         return self._decode(packet, msg_classes=self._response_msg_classes)
 
     def handle_fragments(self, packet):
-        header = source.messages.Header.decode(packet)
-        if header['split'] != source.messages.SPLIT:
+        header = messages.Header.decode(packet)
+        if header['split'] != messages.SPLIT:
             return packet
 
-        fragment = source.messages.Fragment.decode(header.raw_tail)
+        fragment = messages.Fragment.decode(header.raw_tail)
         packet_id = fragment['message_id']
 
         if packet_id in self.fragments:
@@ -229,7 +226,7 @@ class ProxyServer:
         for fragment_id in range(fragment_count):
             fragment_tail = bytes(itertools.islice(packet_iter, mtu))
 
-            fragment_header = source.messages.Fragment().encode(
+            fragment_header = messages.Fragment().encode(
                 message_id=message_id,
                 fragment_count=fragment_count,
                 fragment_id=fragment_id,
@@ -255,19 +252,19 @@ class ProxyServer:
         return [
             asyncio.ensure_future(repeat_until(
                 lambda: self.send_to_server(
-                    source.messages.InfoRequest().encode(nosplit_header=True),
+                    messages.InfoRequest().encode(nosplit_header=True),
                 ),
                 period=self.default_cache_lifetime,
             )),
             asyncio.ensure_future(repeat_until(
                 lambda: self.send_to_server(
-                    source.messages.RulesRequest().encode(challenge=self.a2s_challenge, nosplit_header=True),
+                    messages.RulesRequest().encode(challenge=self.a2s_challenge, nosplit_header=True),
                 ),
                 period=self.default_cache_lifetime,
             )),
             asyncio.ensure_future(repeat_until(
                 lambda: self.send_to_server(
-                    source.messages.PlayersRequest().encode(
+                    messages.PlayersRequest().encode(
                         challenge=self.a2s_challenge, nosplit_header=True,
                     )
                 ),
@@ -277,20 +274,20 @@ class ProxyServer:
     def get_response_for(self, message):
         resp = None
 
-        if isinstance(message, source.messages.InfoRequest):
+        if isinstance(message, messages.InfoRequest):
             resp = self.resp_cache.get('a2s_info')
-        elif isinstance(message, (source.messages.PlayersRequest, source.messages.RulesRequest)):
+        elif isinstance(message, (messages.PlayersRequest, messages.RulesRequest)):
             challenge = message['challenge']
 
             if challenge == self.a2s_challenge:
-                if isinstance(message, source.messages.PlayersRequest):
+                if isinstance(message, messages.PlayersRequest):
                     resp = self.resp_cache.get('a2s_players')
-                elif isinstance(message, source.messages.RulesRequest):
+                elif isinstance(message, messages.RulesRequest):
                     resp = self.resp_cache.get('a2s_rules')
             elif self.a2s_challenge != self.A2S_EMPTY_CHALLENGE:
                 # player request challenge number or we don't know who is it
                 # return challenge number
-                resp = source.messages.GetChallengeResponse().encode(
+                resp = messages.GetChallengeResponse().encode(
                     challenge=self.a2s_challenge, nosplit_header=True,
                 )
 
@@ -319,13 +316,13 @@ class ProxyServer:
         self.send(resp, transport, addr)
 
     def on_server_response_full(self, message, data):
-        if isinstance(message, source.messages.InfoResponse):
+        if isinstance(message, messages.InfoResponse):
             self.resp_cache['a2s_info'] = data
-        elif isinstance(message, source.messages.PlayersResponse):
+        elif isinstance(message, messages.PlayersResponse):
             self.resp_cache['a2s_players'] = data
-        elif isinstance(message, source.messages.RulesResponse):
+        elif isinstance(message, messages.RulesResponse):
             self.resp_cache['a2s_rules'] = data
-        elif isinstance(message, source.messages.GetChallengeResponse):
+        elif isinstance(message, messages.GetChallengeResponse):
             self.resp_cache['a2s_challenge'] = message['challenge']
 
     def on_server_response(self, transport, data, addr):
@@ -500,7 +497,7 @@ def log_future_exception(future, logger):
 
 
 async def main():
-    from config import config
+    from .config import config
 
     csgo_master_server = None
     common_master_server = None

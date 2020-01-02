@@ -18,11 +18,8 @@ You can use [pyenv](https://github.com/pyenv/pyenv) to install any version of Py
 Installing
 ----------
 
-
 ```bash
-git clone https://github.com/spumer/source-query-proxy.git
-cd source-query-proxy
-pip install -r requirements.txt
+pip install source-query-proxy
 ```
 
 
@@ -31,4 +28,14 @@ Run
 
 ```bash
 python daemon.py
+```
+
+
+Development
+-----------
+
+```bash
+git clone https://github.com/spumer/source-query-proxy.git
+cd source-query-proxy
+poetry install
 ```
