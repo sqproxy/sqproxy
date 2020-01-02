@@ -42,16 +42,18 @@ def on_broken_default(func):
 def on_header_required(func):
     @functools.wraps(func)
     def wrap(*args, **kw):
-        nosplit_header = kw.pop('nosplit_header', False)
         split_header = kw.pop('split_header', False)
+        nosplit_header = not split_header
 
         result = func(*args, **kw)
 
         split = (nosplit_header and NO_SPLIT) or (split_header and SPLIT) or _missing
 
-        if split is not _missing:
-            header = Header().encode(split=split)
-            result = b''.join((header, result))
+        if split is _missing:
+            raise RuntimeError
+
+        header = Header().encode(split=split)
+        result = b''.join((header, result))
 
         return result
 

@@ -252,20 +252,20 @@ class ProxyServer:
         return [
             asyncio.ensure_future(repeat_until(
                 lambda: self.send_to_server(
-                    messages.InfoRequest().encode(nosplit_header=True),
+                    messages.InfoRequest().encode(),
                 ),
                 period=self.default_cache_lifetime,
             )),
             asyncio.ensure_future(repeat_until(
                 lambda: self.send_to_server(
-                    messages.RulesRequest().encode(challenge=self.a2s_challenge, nosplit_header=True),
+                    messages.RulesRequest().encode(challenge=self.a2s_challenge),
                 ),
                 period=self.default_cache_lifetime,
             )),
             asyncio.ensure_future(repeat_until(
                 lambda: self.send_to_server(
                     messages.PlayersRequest().encode(
-                        challenge=self.a2s_challenge, nosplit_header=True,
+                        challenge=self.a2s_challenge
                     )
                 ),
             )),
@@ -288,7 +288,7 @@ class ProxyServer:
                 # player request challenge number or we don't know who is it
                 # return challenge number
                 resp = messages.GetChallengeResponse().encode(
-                    challenge=self.a2s_challenge, nosplit_header=True,
+                    challenge=self.a2s_challenge
                 )
 
         return resp
