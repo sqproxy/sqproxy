@@ -43,29 +43,31 @@ class Platform(object):
             if len(value) == 1:
                 value = ord(value)
             else:
+                # fmt: off
                 value = {
-                    "linux": 108,
-                    "mac os x": 111,
-                    "windows": 119,
+                    'linux': 108,
+                    'mac os x': 111,
+                    'windows': 119,
                 }.get(value.lower())
+                # fmt: on
                 if value is None:
-                    raise ValueError("Couldn't convert string {!r} to valid "
-                                     "platform identifier".format(value))
+                    raise ValueError("Couldn't convert string {!r} to valid " 'platform identifier'.format(value))
         if value not in {108, 109, 111, 119}:
-            raise ValueError("Invalid platform identifier {!r}".format(value))
+            raise ValueError('Invalid platform identifier {!r}'.format(value))
         self.value = value
 
     def __repr__(self):
-        return "<{self.__class__.__name__} " \
-               "{self.value} '{self}'>".format(self=self)
+        return '<{self.__class__.__name__} ' "{self.value} '{self}'>".format(self=self)
 
     def __unicode__(self):
+        # fmt: off
         return {
-            108: "Linux",
-            109: "Mac OS X",
-            111: "Mac OS X",
-            119: "Windows",
+            108: 'Linux',
+            109: 'Mac OS X',
+            111: 'Mac OS X',
+            119: 'Windows',
         }[self.value]
+        # fmt: on
 
     def __str__(self):
         return self.__unicode__()
@@ -110,12 +112,14 @@ class Platform(object):
     @property
     def os_name(self):
         """Convenience mapping to names returned by ``os.name``"""
+        # fmt: off
         return {
-            108: "posix",
-            109: "posix",
-            111: "posix",
-            119: "nt",
+            108: 'posix',
+            109: 'posix',
+            111: 'posix',
+            119: 'nt',
         }[self.value]
+        # fmt: on
 
 
 Platform.LINUX = Platform(108)
@@ -160,29 +164,30 @@ class ServerType(object):
             if len(value) == 1:
                 value = ord(value)
             else:
+                # fmt: off
                 value = {
-                    "dedicated": 100,
-                    "non-dedicated": 108,
-                    "sourcetv": 112,
+                    'dedicated': 100,
+                    'non-dedicated': 108,
+                    'sourcetv': 112,
                 }.get(value.lower())
+                # fmt: on
                 if value is None:
-                    raise ValueError("Couldn't convert string {!r} to valid "
-                                     "server type identifier".format(value))
+                    raise ValueError("Couldn't convert string {!r} to valid " 'server type identifier'.format(value))
         if value not in {100, 108, 112}:
-            raise ValueError(
-                "Invalid server type identifier {!r}".format(value))
+            raise ValueError('Invalid server type identifier {!r}'.format(value))
         self.value = value
 
     def __repr__(self):
-        return "<{self.__class__.__name__} " \
-               "{self.value} '{self}'>".format(self=self)
+        return '<{self.__class__.__name__} ' "{self.value} '{self}'>".format(self=self)
 
     def __unicode__(self):
+        # fmt: off
         return {
-            100: "Dedicated",
-            108: "Non-Dedicated",
-            112: "SourceTV",
+            100: 'Dedicated',
+            108: 'Non-Dedicated',
+            112: 'SourceTV',
         }[self.value]
+        # fmt: on
 
     def __str__(self):
         return self.__unicode__()

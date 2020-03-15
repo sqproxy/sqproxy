@@ -1,13 +1,11 @@
-# -*- coding: utf-8 -*-
 # Copyright (C) 2013 Oliver Ainsworth
 
-import struct
-import socket
-import functools
 import collections
+import functools
+import socket
+import struct
 
 from . import util
-
 
 NO_SPLIT = -1
 SPLIT = -2
@@ -20,7 +18,7 @@ class BrokenMessageError(Exception):
 
 
 class BufferExhaustedError(BrokenMessageError):
-    def __init__(self, message="Incomplete message"):
+    def __init__(self, message='Incomplete message'):
         BrokenMessageError.__init__(self, message)
 
 
@@ -65,6 +63,7 @@ def use_self_default(func):
         if value is None:
             return func(self, self.default_value, values)
         return func(self, value, values)
+
     return use_default
 
 
@@ -73,6 +72,7 @@ def needs_buffer(func):
         if len(buffer) == 0:
             raise BufferExhaustedError
         return func(self, buffer, *args, **kwargs)
+
     return needs_buffer
 
 
@@ -85,8 +85,7 @@ class MessageField(object):
     fmt = None
     validators = []
 
-    def __init__(self, name, optional=False,
-                 default_value=None, validators=None):
+    def __init__(self, name, optional=False, default_value=None, validators=None):
         """
             name -- used when decoding messages to set the key in the
                 returned dictionary
@@ -105,8 +104,8 @@ class MessageField(object):
             validators = []
 
         if self.fmt is not None:
-            if self.fmt[0] not in "@=<>!":
-                self.format = "<" + self.fmt
+            if self.fmt[0] not in '@=<>!':
+                self.format = '<' + self.fmt
             else:
                 self.format = self.fmt
 
@@ -120,8 +119,7 @@ class MessageField(object):
         if self.optional:
             if self._value is not None:
                 return self._value
-        raise ValueError(
-            "Field '{fname}' is not optional".format(fname=self.name))
+        raise ValueError("Field '{fname}' is not optional".format(fname=self.name))
 
     def validate(self, value):
         for validator in self.validators:
@@ -129,9 +127,7 @@ class MessageField(object):
                 if not validator(value):
                     raise ValueError
             except Exception:
-                raise BrokenMessageError(
-                    "Invalid value ({}) for field '{}'".format(
-                        value, self.name))
+                raise BrokenMessageError("Invalid value ({}) for field '{}'".format(value, self.name))
         return value
 
     @use_self_default
@@ -168,36 +164,35 @@ class MessageField(object):
         left_overs = buffer[field_size:]
 
         try:
-            return (self.validate(
-                struct.unpack(self.format, field_data)[0]), left_overs)
+            return (self.validate(struct.unpack(self.format, field_data)[0]), left_overs)
         except struct.error as exc:
             raise BrokenMessageError(exc)
 
 
 class ByteField(MessageField):
-    fmt = "B"
+    fmt = 'B'
 
 
 class StringField(MessageField):
-    fmt = "s"
+    fmt = 's'
 
     @use_self_default
     def encode(self, value, values=None):
-        return value.encode("utf8") + b"\x00"
+        return value.encode('utf8') + b'\x00'
 
     @needs_buffer
     def decode(self, buffer, values=None):
-        terminator = buffer.find(b"\x00")
+        terminator = buffer.find(b'\x00')
         if terminator == -1:
-            raise BufferExhaustedError("No string terminator")
+            raise BufferExhaustedError('No string terminator')
         field_size = terminator + 1
-        field_data = buffer[:field_size-1]
+        field_data = buffer[: field_size - 1]
         left_overs = buffer[field_size:]
-        return self.validate(field_data.decode("utf8", "ignore")), left_overs
+        return self.validate(field_data.decode('utf8', 'ignore')), left_overs
 
 
 class ShortFieldLE(MessageField):  # little-endian
-    fmt = "<h"
+    fmt = '<h'
 
 
 class ShortFieldBE(MessageField):  # big-endian
@@ -205,7 +200,7 @@ class ShortFieldBE(MessageField):  # big-endian
 
 
 class LongFieldLE(MessageField):  # little-endian
-    fmt = "<l"
+    fmt = '<l'
 
 
 class LongFieldBE(MessageField):  # big-endian
@@ -213,24 +208,20 @@ class LongFieldBE(MessageField):  # big-endian
 
 
 class FloatField(MessageField):
-    fmt = "f"
+    fmt = 'f'
 
 
 class PlatformField(ByteField):
-
     @needs_buffer
     def decode(self, buffer, values=None):
-        byte, remnant_buffer = super(PlatformField,
-                                     self).decode(buffer, values)
+        byte, remnant_buffer = super(PlatformField, self).decode(buffer, values)
         return util.Platform(byte), remnant_buffer
 
 
 class ServerTypeField(ByteField):
-
     @needs_buffer
     def decode(self, buffer, values=None):
-        byte, remnant_buffer = super(ServerTypeField,
-                                     self).decode(buffer, values)
+        byte, remnant_buffer = super(ServerTypeField, self).decode(buffer, values)
         return util.ServerType(byte), remnant_buffer
 
 
@@ -274,7 +265,7 @@ class MessageArrayField(MessageField):
         # in most cases count would be a Message.value_of(), however
         # if an integer is provided it will be wrapped in a lambda.
         self.count = count
-        if not hasattr(count, "__call__"):
+        if not hasattr(count, '__call__'):
 
             def const_count(values=None):
                 return count
@@ -291,14 +282,14 @@ class MessageArrayField(MessageField):
         for i, element in enumerate(elements):
             if not isinstance(element, self.element):
                 raise BrokenMessageError(
-                    "Element {} ({}) is not instance of {}".format(
-                        i, element, self.element.__name__))
+                    'Element {} ({}) is not instance of {}'.format(i, element, self.element.__name__)
+                )
             if i + 1 > self.count(values):
-                raise BrokenMessageError("Too many elements")
+                raise BrokenMessageError('Too many elements')
             buf.append(element.encode())
         if len(buf) < self.count.minimum:
-            raise BrokenMessageError("Too few elements")
-        return b"".join(buf)
+            raise BrokenMessageError('Too few elements')
+        return b''.join(buf)
 
     def decode(self, buffer, values=None):
         if values is None:
@@ -417,7 +408,7 @@ class MessageDictField(MessageArrayField):
             count is the same as MessageArrayField.
         """
 
-        element = type("KeyValueField", (Message,), {"fields": (key_field, value_field)})
+        element = type('KeyValueField', (Message,), {'fields': (key_field, value_field)})
         self.key_field = key_field
         self.value_field = value_field
         MessageArrayField.__init__(self, name, element, count)
@@ -426,12 +417,11 @@ class MessageDictField(MessageArrayField):
         entries, buffer = MessageArrayField.decode(self, buffer, values)
         entries_dict = {}
         for entry in entries:
-            entries_dict[entry[
-                self.key_field.name]] = entry[self.value_field.name]
+            entries_dict[entry[self.key_field.name]] = entry[self.value_field.name]
         return entries_dict, buffer
 
 
-class Message(collections.Mapping):
+class Message(collections.abc.MutableMapping):
 
     fields = ()
 
@@ -454,7 +444,6 @@ class Message(collections.Mapping):
     def __iter__(self):
         return iter(self.values)
 
-    @on_header_required
     def encode(self, **field_values):
         values = dict(self.values, **field_values)
         buf = []
@@ -474,105 +463,93 @@ class Message(collections.Mapping):
 
 class Header(Message):
 
+    fields = (LongFieldLE('split', validators=[lambda x: x in [SPLIT, NO_SPLIT]]),)
+
+
+class Packet(Message):
+    """Message with Header"""
+
+    encode = on_header_required(Message.encode)
+
+
+class Fragment(Packet):
+
     fields = (
-        LongFieldLE("split", validators=[lambda x: x in [SPLIT, NO_SPLIT]]),
-    )
-
-
-class Fragment(Message):
-
-    fields = (
-        LongFieldLE("message_id"),
-        ByteField("fragment_count"),
-        ByteField("fragment_id"),  # 0-indexed
-        ShortFieldLE("mtu")
+        LongFieldLE('message_id'),
+        ByteField('fragment_count'),
+        ByteField('fragment_id'),  # 0-indexed
+        ShortFieldLE('mtu'),
     )
 
     @property
     def is_compressed(self):
         # check MSB (Most Significant Bit)
-        return bool(self["message_id"] & (1 << 16))
+        return bool(self['message_id'] & (1 << 16))
 
 
 # TODO: FragmentCompressionData
 
 
-class InfoRequest(Message):
+class InfoRequest(Packet):
 
     fields = (
-        ByteField("request_type", True, 0x54, validators=[lambda x: x == 0x54]),
-        StringField("payload", True, "Source Engine Query")
+        ByteField('request_type', True, 0x54, validators=[lambda x: x == 0x54]),
+        StringField('payload', True, 'Source Engine Query'),
     )
 
 
-class InfoResponse(Message):
+class InfoResponse(Packet):
 
     fields = (
-        ByteField("response_type", validators=[lambda x: x == 0x49]),
-        ByteField("protocol"),
-        StringField("server_name"),
-        StringField("map"),
-        StringField("folder"),
-        StringField("game"),
-        ShortFieldLE("app_id"),
-        ByteField("player_count"),
-        ByteField("max_players"),
-        ByteField("bot_count"),
-        ServerTypeField("server_type"),
-        PlatformField("platform"),
-        ByteField("password_protected"),  # BooleanField
-        ByteField("vac_enabled"),  # BooleanField
-        StringField("version")
+        ByteField('response_type', validators=[lambda x: x == 0x49]),
+        ByteField('protocol'),
+        StringField('server_name'),
+        StringField('map'),
+        StringField('folder'),
+        StringField('game'),
+        ShortFieldLE('app_id'),
+        ByteField('player_count'),
+        ByteField('max_players'),
+        ByteField('bot_count'),
+        ServerTypeField('server_type'),
+        PlatformField('platform'),
+        ByteField('password_protected'),  # BooleanField
+        ByteField('vac_enabled'),  # BooleanField
+        StringField('version')
         # TODO: EDF
     )
 
 
-class GetChallengeResponse(Message):
+class GetChallengeResponse(Packet):
+
+    fields = (ByteField('response_type', True, 0x41, validators=[lambda x: x == 0x41]), LongFieldLE('challenge'))
+
+
+class PlayersRequest(Packet):
+
+    fields = (ByteField('request_type', True, 0x55, validators=[lambda x: x == 0x55]), LongFieldLE('challenge'))
+
+
+class PlayerEntry(Packet):
+
+    fields = (ByteField('index'), StringField('name'), LongFieldLE('score'), FloatField('duration'))
+
+
+class PlayersResponse(Packet):
 
     fields = (
-        ByteField("response_type", True, 0x41, validators=[lambda x: x == 0x41]),
-        LongFieldLE("challenge")
+        ByteField('response_type', validators=[lambda x: x == 0x44]),
+        ByteField('player_count'),
+        MessageArrayField('players', PlayerEntry, MessageArrayField.value_of('player_count')),
     )
 
 
-class PlayersRequest(Message):
+class RulesRequest(Packet):
 
-    fields = (
-        ByteField("request_type", True, 0x55, validators=[lambda x: x == 0x55]),
-        LongFieldLE("challenge")
-    )
+    fields = (ByteField('request_type', True, 0x56, validators=[lambda x: x == 0x56]), LongFieldLE('challenge'))
 
 
-class PlayerEntry(Message):
-
-    fields = (
-        ByteField("index"),
-        StringField("name"),
-        LongFieldLE("score"),
-        FloatField("duration")
-    )
-
-
-class PlayersResponse(Message):
-
-    fields = (
-        ByteField("response_type", validators=[lambda x: x == 0x44]),
-        ByteField("player_count"),
-        MessageArrayField("players",
-                          PlayerEntry,
-                          MessageArrayField.value_of("player_count"))
-    )
-
-
-class RulesRequest(Message):
-
-    fields = (
-        ByteField("request_type", True, 0x56, validators=[lambda x: x == 0x56]),
-        LongFieldLE("challenge")
-    )
-
-
-class RulesResponse(Message):
+class RulesResponse(Packet):
 
     fields = (
         # A2S_RESPONSE misteriously seems to add a FF FF FF FF
@@ -580,63 +557,48 @@ class RulesResponse(Message):
         # mentioned on the wiki.
         #
         # Behaviour witnessed with TF2 server 94.23.226.200:2045
-        #LongFieldLE("long"),
-        ByteField("response_type", validators=[lambda x: x == 0x45]),
-        ShortFieldLE("rule_count"),
-        MessageDictField("rules",
-                         StringField("key"),
-                         StringField("value"),
-                         MessageArrayField.value_of("rule_count"))
+        # LongFieldLE("long"),
+        ByteField('response_type', validators=[lambda x: x == 0x45]),
+        ShortFieldLE('rule_count'),
+        MessageDictField('rules', StringField('key'), StringField('value'), MessageArrayField.value_of('rule_count')),
     )
 
 
 # For Master Server
 class MSAddressEntryPortField(MessageField):
-    fmt = "!H"
+    fmt = '!H'
 
 
 class MSAddressEntryIPField(MessageField):
-
     @needs_buffer
     def decode(self, buffer, values=None):
         if len(buffer) < 4:
             raise BufferExhaustedError
         field_data = buffer[:4]
         left_overs = buffer[4:]
-        return (
-            '.'.join(str(b) for b in struct.unpack(b'<BBBB', field_data)),
-            left_overs
-        )
+        return '.'.join(str(b) for b in struct.unpack(b'<BBBB', field_data)), left_overs
 
 
-class MasterServerRequest(Message):
+class MasterServerRequest(Packet):
 
-    fields = (
-        ByteField("request_type", True, 0x31),
-        ByteField("region"),
-        StringField("address"),
-        StringField("filter")
-    )
+    fields = (ByteField('request_type', True, 0x31), ByteField('region'), StringField('address'), StringField('filter'))
 
 
 class MSAddressEntry(Message):
 
-    fields = (
-        MSAddressEntryIPField("host"),
-        MSAddressEntryPortField("port")
-    )
+    fields = (MSAddressEntryIPField('host'), MSAddressEntryPortField('port'))
 
     @property
     def is_null(self):
-        return self["host"] == "0.0.0.0" and self["port"] == 0
+        return self['host'] == '0.0.0.0' and self['port'] == 0
 
 
-class MasterServerResponse(Message):
+class MasterServerResponse(Packet):
 
     fields = (
         # The first two fields are always FF FF FF FF and 66 0A
         # and can be ignored.
-        MSAddressEntryIPField("start_host"),
-        MSAddressEntryPortField("start_port"),
-        MessageArrayField("addresses", MSAddressEntry, MessageArrayField.all())
+        MSAddressEntryIPField('start_host'),
+        MSAddressEntryPortField('start_port'),
+        MessageArrayField('addresses', MSAddressEntry, MessageArrayField.all()),
     )

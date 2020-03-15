@@ -1,20 +1,44 @@
 [tool.poetry]
 name = "source-query-proxy"
-version = "0.15.0"
+version = "1.0.0beta2"
 description = "Async proxy for Source Engine Query Protocol"
 authors = ["spumer <spumer-tm@yandex.ru>"]
 license = "GPL-3.0"
 homepage = "https://github.com/spumer/source-query-proxy"
-readme = 'README.md'  # Markdown files are supported
+readme = 'README.rst'
 keywords = ['valve', 'source', 'engine', 'proxy', 'query', 'cache']
 
 [tool.poetry.dependencies]
-python = "^3.5"
-uvloop = "0.12.2"
-pylru = "1.2.0"
+python = "^3.7"
+uvloop = "0.14.0"
+pylru = "^1.2.0"
+pydantic = {extras = ["dotenv"], version = "^1.4"}
+pyyaml = "^5.2"
+pid = "^2.2"
+python-dotenv = "^0.10.3"
+asyncio_dgram = "^1.0"
+backoff = "^1.10"
+async-timeout = "^3.0"
+click = "^7.0"
+pyroute2 = "^0.5.10"
 
 [tool.poetry.dev-dependencies]
+pytest-asyncio = "^0.10.0"
+pytest = "^5"
+bumpversion = "^0.5.3"
+unify = "^0.4.0"
+flake8-awesome = "^1.2"
+black = "^19.10b0"
+pytest-cov = "^2.6"
+pytest-deadfixtures = "^2.1.0"
 
+[tool.poetry.scripts]
+sqproxy = "source_query_proxy.cli:sqproxy"
+
+
+[tool.dephell.main]
+from = {format = "poetry", path = "pyproject.toml"}
+to = {format = "setuppy", path = "setup.py"}
 [build-system]
 requires = ["poetry>=0.12"]
 build-backend = "poetry.masonry.api"

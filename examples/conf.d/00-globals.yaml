@@ -1,0 +1,40 @@
+# Defaults for each server in `servers` section
+# Any of these `values` can be overridden locally:
+# in local `defaults` section
+# in `servers` section
+defaults:
+  # True - defaults will be applied for each NEXT config file in conf.d directory
+  # False - applied only for current file
+  # conf.d/ files read sequentially by alphabetical order
+  # we recommend start config names with sequential value: 00-globals.yaml, 01-game1.yaml, 02-game2.yaml
+  global: True
+  values:
+    network:
+      # Real game server IP address
+      server_ip: '78.139.77.165'
+      # IP address for listening incoming queries
+      bind_ip: '0.0.0.0'
+    # How often update A2S_INFO data
+    a2s_info_cache_lifetime: 5
+    # How often update A2S_RULES data
+    a2s_rules_cache_lifetime: 5
+    # How often update A2S_PLAYERS data
+    a2s_players_cache_lifetime: 1
+    # How often change src port for queries to Real Game Server
+    # Some games required that due integrated ddos protection
+    # Without it sqporxy ip:port will be "banned" for queries
+    src_query_port_lifetime: 10
+
+
+# See 01-dummy-game.yaml
+servers:
+
+
+# Automatically run eBPF redirection
+ebpf:
+  # Download any release of SQProxy Kernel Module
+  # And add path to `redirect.py`
+  # https://github.com/spumer/source-query-proxy-kernel-module/releases
+  enabled: False
+  executable: 'python2'
+  script_path: './src-ebpf/redirect.py'

@@ -1,0 +1,13 @@
+# Local defaults
+# Empty. Only demonstrate file structure
+defaults:
+
+servers:
+  MyLittleServer:
+    network:
+      server_port: 27015
+      bind_port: 27815
+  MyVeryBigServer:
+    network:
+      server_port: 27016
+      bind_port: 27816
