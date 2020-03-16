@@ -35,9 +35,7 @@ Run with eBPF
 
 https://github.com/spumer/source-query-proxy-kernel-module/src-ebpf
 
-1. Download eBPF script
-
-    * Copy ``src-ebpf`` folder to target working directory
+1. Download eBPF script and copy ``src-ebpf`` folder to target working directory
 
 2. Install requirements https://github.com/spumer/source-query-proxy-kernel-module/src-ebpf/README.md
 
@@ -45,9 +43,9 @@ https://github.com/spumer/source-query-proxy-kernel-module/src-ebpf
 
 4. Run
 
-    .. code-block:: bash
+.. code-block:: bash
 
-        sqproxy run
+    sqproxy run
 
 
 Development
