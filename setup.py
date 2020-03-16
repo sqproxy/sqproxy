@@ -21,7 +21,7 @@ if os.path.exists(readme_path):
 setup(
     long_description=readme,
     name='source-query-proxy',
-    version='1.0.0beta2',
+    version='1.0.0',
     description='Async proxy for Source Engine Query Protocol',
     python_requires='==3.*,>=3.7.0',
     project_urls={"homepage": "https://github.com/spumer/source-query-proxy"},
