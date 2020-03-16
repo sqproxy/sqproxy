@@ -40,7 +40,7 @@ class CSGOAggregator:
 
     def format_lines(self):
         lines = [
-            "Messages per second: {mps} m/s".format(mps=self.mps_counter.count),
+            'Messages per second: {mps} m/s'.format(mps=self.mps_counter.count),
         ]
 
         return lines
@@ -56,7 +56,7 @@ def test():
         counter.emit()
         time.sleep(0.1)
 
-        print("Counter:", counter.count, end='\r')
+        print('Counter:', counter.count, end='\r')  # noqa: ignore=T001
 
 
 if __name__ == '__main__':
