@@ -22,6 +22,14 @@ Installing
 
     pip install source-query-proxy==1.0.0
 
+Configuring
+-----------
+
+sqproxy search configs in ``/etc/sqproxy/conf.d`` and ``./conf.d`` directories.
+You should place your config files only in this directories.
+
+For more info see `examples <examples/conf.d>`_
+
 Run
 ---
 
