@@ -41,11 +41,11 @@ Run
 Run with eBPF
 -------------
 
-https://github.com/spumer/source-query-proxy-kernel-module/src-ebpf
+https://github.com/spumer/source-query-proxy-kernel-module/tree/master/src-ebpf
 
 1. Download eBPF script and copy ``src-ebpf`` folder to target working directory
 
-2. Install requirements https://github.com/spumer/source-query-proxy-kernel-module/src-ebpf/README.md
+2. Install requirements https://github.com/spumer/source-query-proxy-kernel-module/tree/master/src-ebpf/README.md
 
 3. Enable eBPF in config (see examples/00-globals.yaml)
 
