@@ -25,6 +25,21 @@ class BrokenPacketError(Exception):  # FIXME?
         self.addr = addr
 
 
+class BindProtocol(Protocol):
+    def __init__(self, recvq, excq, drained, logger):
+        super().__init__(recvq, excq, drained)
+        self.logger = logger
+
+    def error_received(self, exc):
+        self.logger.debug('Error received', exc_info=exc)
+        super().error_received(exc)
+
+    def connection_lost(self, exc):
+        if exc is not None:
+            self.logger.debug('Connection lost with error', exc_info=exc)
+            self._excq.put_nowait(exc)
+
+
 class SourceDatagramStream(DatagramStream):
     FRAGMENT_MAX_SIZE = 1200
     MAX_FRAGMENTS_PER_PACKET = 100
@@ -179,22 +194,26 @@ class SourceDatagramClient(SourceDatagramStream):
             return message, data, addr
 
 
-async def bind(addr) -> SourceDatagramServer:
+async def bind(addr, *, protocol_logger=None) -> SourceDatagramServer:
     """
     Bind a socket to a local address for datagrams.  The socket will be either
     AF_INET or AF_INET6 depending upon the type of address specified.
 
-    @param addr - For AF_INET or AF_INET6, a tuple with the the host and port to
+    :param addr - For AF_INET or AF_INET6, a tuple with the the host and port to
                   to bind; port may be set to 0 to get any free port.
-    @return     - A SourceDatagramServer instance
+    :param protocol_logger:
+    :return     - A SourceDatagramServer instance
     """
     loop = asyncio.get_event_loop()
     recvq = asyncio.Queue()
     excq = asyncio.Queue()
     drained = asyncio.Event()
 
+    if protocol_logger is None:
+        protocol_logger = logging.getLogger(f'BindProtocol({addr})')
+
     transport, protocol = await loop.create_datagram_endpoint(
-        lambda: Protocol(recvq, excq, drained), local_addr=addr, reuse_address=False
+        lambda: BindProtocol(recvq, excq, drained, protocol_logger), local_addr=addr, reuse_address=False
     )
 
     return SourceDatagramServer(transport, recvq, excq, drained)
