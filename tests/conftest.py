@@ -8,9 +8,9 @@ import pytest
 @pytest.fixture(params=['INET'])
 def addr_family(request):
     if request.param == 'INET':
-        return ('127.0.0.1', 0), socket.AF_INET
+        return ('0.0.0.0', 0), socket.AF_INET
     elif request.param == 'INET6':
-        return ('::1', 0), socket.AF_INET6
+        return ('::', 0), socket.AF_INET6
     raise NotImplementedError
 
 
