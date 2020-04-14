@@ -21,7 +21,7 @@ if os.path.exists(readme_path):
 setup(
     long_description=readme,
     name='source-query-proxy',
-    version='1.0.0',
+    version='1.0.1',
     description='Async proxy for Source Engine Query Protocol',
     python_requires='==3.*,>=3.7.0',
     project_urls={"homepage": "https://github.com/spumer/source-query-proxy"},
@@ -37,17 +37,17 @@ setup(
     package_data={},
     install_requires=[
         'async-timeout==3.*,>=3.0.0', 'asyncio-dgram==1.*,>=1.0.0',
-        'backoff==1.*,>=1.10.0', 'click==7.*,>=7.0.0', 'pid==2.*,>=2.2.0',
+        'backoff==1.*,>=1.10.0', 'click==7.*,>=7.0.0', 'pid<4.0,>=2.2',
         'pydantic[dotenv]==1.*,>=1.4.0', 'pylru==1.*,>=1.2.0',
         'pyroute2==0.*,>=0.5.10', 'python-dotenv==0.*,>=0.10.3',
-        'pyyaml==5.*,>=5.2.0', 'uvloop==0.14.0'
+        'pyyaml==5.*,>=5.2.0', 'sentry-sdk==0.*,>=0.14.3', 'uvloop==0.14.0'
     ],
     extras_require={
         "dev": [
             "black==19.*,>=19.10.0", "bumpversion==0.*,>=0.5.3",
             "flake8-awesome==1.*,>=1.2.0", "pytest==5.*,>=5.0.0",
             "pytest-asyncio==0.*,>=0.10.0", "pytest-cov==2.*,>=2.6.0",
-            "pytest-deadfixtures==2.*,>=2.1.0", "unify==0.*,>=0.4.0"
+            "pytest-deadfixtures==2.*,>=2.1.0", "unify==0.*,>=0.5.0"
         ]
     },
 )
