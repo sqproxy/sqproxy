@@ -1,0 +1,14 @@
+language: python
+python:
+  - "3.7"
+  - "3.8"
+# command to install dependencies
+before_install:
+  - pip install poetry
+install:
+  - poetry install
+# command to run tests
+script: make lint test
+after_success:
+  - pip install coveralls;
+  - coveralls
