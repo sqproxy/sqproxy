@@ -60,7 +60,7 @@ def _dummy_config(conf_d_globals, conf_d_dummy_game):
 
 
 def test_global_defaults_injected(_dummy_config):
-    assert config.settings.merged_config_data['servers'] == {
+    assert config.settings.get_merged_config_data()['servers'] == {
         'MyLittleServer': {
             'network': {
                 'server_ip': '192.168.1.1',

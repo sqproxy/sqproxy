@@ -3,12 +3,15 @@ import pathlib
 import typing
 from ipaddress import IPv4Address
 
+import sentry_sdk
 import yaml
+from pydantic import AnyHttpUrl
 from pydantic import BaseModel
 from pydantic import BaseSettings
 from pydantic import Extra
-from pydantic import validator
+from sentry_sdk.integrations.logging import LoggingIntegration
 
+from . import __version__
 from .dict_merge import dict_merge
 from .logging import setup_logging
 
@@ -57,22 +60,20 @@ class EBPFModel(BaseModel):
 
 
 class Settings(BaseSettings):
+    sentry_dsn: typing.Optional[AnyHttpUrl] = None
     confdir_0: pathlib.Path = '/etc/sqporxy/conf.d/'
     confdir_1: pathlib.Path = './conf.d/'
+    error_log: pathlib.Path = '/var/log/sqproxy/error.log'
     debug_log: pathlib.Path = '/var/log/sqproxy/debug.log'
     debug_log_enabled: bool = False
     piddir: typing.Optional[pathlib.Path] = None
-    merged_config_data: dict = None
 
     class Config:
         env_file = '.env'
         env_prefix = 'SQPROXY_'
 
-    @validator('merged_config_data')
-    def merge_config_data(cls, v, values):  # noqa: ignore=N805
-        assert v is None
-        v = load_configs(iter_config_files(values['confdir_0'], values['confdir_1']))
-        return v
+    def get_merged_config_data(self):
+        return load_configs(iter_config_files(self.confdir_0, self.confdir_1))
 
 
 def _apply_defaults(target, defaults):
@@ -112,6 +113,8 @@ def iter_config_files(*confdirs):
             if file.is_file() and file.name.endswith('.yaml'):
                 logger.info('Found config: %s', file.as_posix())
                 yield file
+            else:
+                logger.debug('Found non-config file, ignore: %s', file.as_posix())
 
 
 def load_configs(paths: typing.Iterable[pathlib.Path]):
@@ -150,14 +153,34 @@ def setup(settings_: Settings = None):
 
     settings = settings_
 
-    setup_logging(filename=settings.debug_log_enabled and settings.debug_log.as_posix() or None)
+    if settings.sentry_dsn:
+        sentry_logging = LoggingIntegration(
+            level=logging.DEBUG,  # Capture info and above as breadcrumbs
+            event_level=logging.ERROR,  # Send errors as events
+        )
+        sentry_sdk.init(
+            dsn=settings.sentry_dsn, integrations=[sentry_logging], release=__version__,
+        )
 
-    servers_ = settings.merged_config_data.get('servers')
+    debug_filename = settings.debug_log_enabled and settings.debug_log.as_posix() or None
+
+    setup_logging(
+        debug_filename=debug_filename, error_filename=settings.error_log.as_posix(),
+    )
+
+    if settings.sentry_dsn:
+        logger.debug('Sentry enabled')
+    else:
+        logger.debug('Sentry disabled')
+
+    merged_config_data = settings.get_merged_config_data()
+
+    servers_ = merged_config_data.get('servers')
     if servers_:
         global servers
         servers = [(name, ServerModel.parse_obj(server)) for name, server in servers_.items()]
 
-    ebpf_ = settings.merged_config_data.get('ebpf')
+    ebpf_ = merged_config_data.get('ebpf')
     if ebpf_:
         global ebpf
         ebpf = EBPFModel.parse_obj(ebpf_)

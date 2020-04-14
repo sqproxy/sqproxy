@@ -225,4 +225,12 @@ class QueryProxy:
         return resp
 
     async def run(self):
-        await asyncio.gather(self.update_server_query_cache(), self.listen_client_requests())
+        done, pending = await asyncio.wait(
+            [self.update_server_query_cache(), self.listen_client_requests()], return_when=asyncio.FIRST_COMPLETED,
+        )
+        for task in done:
+            exc = task.exception() if not task.cancelled() else None
+            self.logger.error('Task unexpectedly completed', exc_info=exc)  # noqa: ignore=G201
+
+        for task in pending:
+            task.cancel()
