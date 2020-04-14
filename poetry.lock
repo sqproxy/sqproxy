@@ -575,7 +575,7 @@ description = "A simple plugin to list unused fixtures in pytest"
 name = "pytest-deadfixtures"
 optional = false
 python-versions = "*"
-version = "2.1.0"
+version = "2.2.0"
 
 [package.dependencies]
 pytest = ">=3.0.0"
@@ -702,7 +702,7 @@ docs = ["sphinx", "jaraco.packaging (>=3.2)", "rst.linker (>=1.9)"]
 testing = ["jaraco.itertools"]
 
 [metadata]
-content-hash = "a2c441f12a87ceabd93f93ed3755db17ba39f347f6119fc0b473d88607a22f8e"
+content-hash = "1d5f4d3ab17bed9c68884acd6685a9effd4a53e854c9dd0911e27dc537f35032"
 python-versions = "^3.7"
 
 [metadata.files]
@@ -944,8 +944,8 @@ pytest-cov = [
     {file = "pytest_cov-2.8.1-py2.py3-none-any.whl", hash = "sha256:cdbdef4f870408ebdbfeb44e63e07eb18bb4619fae852f6e760645fa36172626"},
 ]
 pytest-deadfixtures = [
-    {file = "pytest-deadfixtures-2.1.0.tar.gz", hash = "sha256:458b2314862696af11223d869c97814e63db8a7b9f61dcf42fe07a72a7ff9bd8"},
-    {file = "pytest_deadfixtures-2.1.0-py2.py3-none-any.whl", hash = "sha256:61e34fb0f777bc0f321c7d45f39447e965fb1a6d2de243e47aa034387229d9d3"},
+    {file = "pytest-deadfixtures-2.2.0.tar.gz", hash = "sha256:4fa7c7031c3229be551a206b5128aec2d816dd7148b0d963b0086108ccaae080"},
+    {file = "pytest_deadfixtures-2.2.0-py2.py3-none-any.whl", hash = "sha256:16be27beadf0e13af06b0e89476664b03e57d0875913856e74fb35b30cbcca22"},
 ]
 python-dotenv = [
     {file = "python-dotenv-0.10.5.tar.gz", hash = "sha256:f254bfd0c970d64ccbb6c9ebef3667ab301a71473569c991253a481f1c98dddc"},
