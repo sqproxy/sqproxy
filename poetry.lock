@@ -506,7 +506,7 @@ description = "Python Netlink library"
 name = "pyroute2"
 optional = false
 python-versions = "*"
-version = "0.5.10"
+version = "0.5.11"
 
 [package.dependencies]
 win_inet_pton = "*"
@@ -929,7 +929,7 @@ pyparsing = [
     {file = "pyparsing-2.4.6.tar.gz", hash = "sha256:4c830582a84fb022400b85429791bc551f1f4871c33f23e44f353119e92f969f"},
 ]
 pyroute2 = [
-    {file = "pyroute2-0.5.10.tar.gz", hash = "sha256:39aca55d1d2ccc37062840eb81ae91de1bdf4bcec61e905f6d27ec6378d0742a"},
+    {file = "pyroute2-0.5.11.tar.gz", hash = "sha256:05e959f1a89d715158b91fe83b67946a4441e5e098cc225f4df78a3765ac4af2"},
 ]
 pytest = [
     {file = "pytest-5.3.5-py3-none-any.whl", hash = "sha256:ff615c761e25eb25df19edddc0b970302d2a9091fbce0e7213298d85fb61fef6"},
