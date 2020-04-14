@@ -15,7 +15,7 @@ pylru = "^1.2.0"
 pydantic = {extras = ["dotenv"], version = "^1.4"}
 pyyaml = "^5.2"
 pid = ">=2.2,<4.0"
-python-dotenv = "^0.10.3"
+python-dotenv = ">=0.10.3,<0.13.0"
 asyncio_dgram = "^1.0"
 backoff = "^1.10"
 async-timeout = "^3.0"
