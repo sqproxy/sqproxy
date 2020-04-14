@@ -21,11 +21,10 @@ backoff = "^1.10"
 async-timeout = "^3.0"
 click = "^7.0"
 pyroute2 = "^0.5.10"
-sentry-sdk = "^0.14.3"
 
 [tool.poetry.dev-dependencies]
 pytest-asyncio = "^0.10.0"
-pytest = "^5"
+pytest = "==5.3.*,^5.3"
 bumpversion = "^0.5.3"
 unify = "^0.5"
 flake8-awesome = "^1.2"

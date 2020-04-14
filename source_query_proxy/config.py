@@ -3,15 +3,12 @@ import pathlib
 import typing
 from ipaddress import IPv4Address
 
-import sentry_sdk
 import yaml
 from pydantic import AnyHttpUrl
 from pydantic import BaseModel
 from pydantic import BaseSettings
 from pydantic import Extra
-from sentry_sdk.integrations.logging import LoggingIntegration
 
-from . import __version__
 from .dict_merge import dict_merge
 from .logging import setup_logging
 
@@ -152,15 +149,6 @@ def setup(settings_: Settings = None):
         settings_ = Settings()
 
     settings = settings_
-
-    if settings.sentry_dsn:
-        sentry_logging = LoggingIntegration(
-            level=logging.DEBUG,  # Capture info and above as breadcrumbs
-            event_level=logging.ERROR,  # Send errors as events
-        )
-        sentry_sdk.init(
-            dsn=settings.sentry_dsn, integrations=[sentry_logging], release=__version__,
-        )
 
     debug_filename = settings.debug_log_enabled and settings.debug_log.as_posix() or None
 
