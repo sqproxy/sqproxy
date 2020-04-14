@@ -650,7 +650,7 @@ description = "Modifies strings to all use the same (single/double) quote where 
 name = "unify"
 optional = false
 python-versions = "*"
-version = "0.4"
+version = "0.5"
 
 [package.dependencies]
 untokenize = "*"
@@ -702,7 +702,7 @@ docs = ["sphinx", "jaraco.packaging (>=3.2)", "rst.linker (>=1.9)"]
 testing = ["jaraco.itertools"]
 
 [metadata]
-content-hash = "2fee04de1d670016c422bf74ad946cff0c628688f8288aa3dabd05418f66a5cf"
+content-hash = "a2c441f12a87ceabd93f93ed3755db17ba39f347f6119fc0b473d88607a22f8e"
 python-versions = "^3.7"
 
 [metadata.files]
@@ -1024,7 +1024,7 @@ typed-ast = [
     {file = "typed_ast-1.4.1.tar.gz", hash = "sha256:8c8aaad94455178e3187ab22c8b01a3837f8ee50e09cf31f1ba129eb293ec30b"},
 ]
 unify = [
-    {file = "unify-0.4.tar.gz", hash = "sha256:eec763bf72cdbc55543924f8ff4a4f4985cdd8e358447ac59d2140972eb1165d"},
+    {file = "unify-0.5.tar.gz", hash = "sha256:8ddce812b2457212b7598fe574c9e6eb3ad69710f445391338270c7f8a71723c"},
 ]
 untokenize = [
     {file = "untokenize-0.1.1.tar.gz", hash = "sha256:3865dbbbb8efb4bb5eaa72f1be7f3e0be00ea8b7f125c69cbd1f5fda926f37a2"},
