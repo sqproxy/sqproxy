@@ -61,7 +61,7 @@ class EBPFModel(BaseModel):
 
 class Settings(BaseSettings):
     sentry_dsn: typing.Optional[AnyHttpUrl] = None
-    confdir_0: pathlib.Path = '/etc/sqporxy/conf.d/'
+    confdir_0: pathlib.Path = '/etc/sqproxy/conf.d/'
     confdir_1: pathlib.Path = './conf.d/'
     error_log: pathlib.Path = '/var/log/sqproxy/error.log'
     debug_log: pathlib.Path = '/var/log/sqproxy/debug.log'
