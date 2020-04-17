@@ -91,11 +91,14 @@ class QueryProxy:
                 await listening.send_packet(response, addr=addr)
 
     async def update_server_query_cache(self):
-        return await asyncio.gather(
+        coros = [
             self.retry_TimeoutError(self._update_info)(),
             self.retry_TimeoutError(self._update_players)(),
-            self.retry_TimeoutError(self._update_rules)(),
-        )
+        ]
+        if not self.settings.no_a2s_rules:
+            coros.append(self.retry_TimeoutError(self._update_rules)())
+
+        return await asyncio.gather(*coros)
 
     async def send_recv_packet(self, client, packet: messages.Packet, timeout=None):
         """Send packet and wait for response for it
@@ -243,6 +246,7 @@ class QueryProxy:
 
         await resp_cache.get_wait('a2s_info')
         await resp_cache.get_wait('a2s_players')
-        await resp_cache.get_wait('a2s_rules')
+        if not self.settings.no_a2s_rules:
+            await resp_cache.get_wait('a2s_rules')
 
         self.resp_cache = dict(resp_cache)

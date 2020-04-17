@@ -25,6 +25,14 @@ defaults:
     # Without it sqporxy ip:port will be "banned" for queries
     src_query_port_lifetime: 10
 
+    # False (default) - no action, A2S_RULES will work
+    # True - don't update A2S_RULES cache
+    # This will be helpful for HLDS servers which protocol is different
+    # But be careful, you also need disable redirection for A2S_RULES packets
+    # see the IS_QUERY_REQUEST_PACKET in https://github.com/spumer/source-query-proxy-kernel-module/blob/master/src-ebpf/utils.h
+    # CS:GO also has broken A2S_RULES, but fix available at https://forums.alliedmods.net/showthread.php?t=236521
+    no_a2s_rules: false
+
 
 # See 01-dummy-game.yaml
 servers:

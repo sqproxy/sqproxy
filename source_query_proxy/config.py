@@ -45,6 +45,7 @@ class ServerModel(BaseModel):
     a2s_rules_cache_lifetime: int = 5
     a2s_players_cache_lifetime: int = 1
     src_query_port_lifetime: int = 10
+    no_a2s_rules: bool = False
 
     class Config:
         extra = Extra.forbid
