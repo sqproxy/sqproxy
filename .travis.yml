@@ -8,7 +8,7 @@ before_install:
 install:
   - poetry install
 # command to run tests
-script: make lint test
+script: make test lint
 after_success:
   - pip install coveralls;
   - coveralls
