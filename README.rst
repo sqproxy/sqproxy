@@ -2,6 +2,18 @@
 source-query-proxy
 ==================
 
+Motivation
+----------
+
+Basically Source game-servers works in one thread and can't use more than one core for in-game logic.
+For example - CS:GO, CS:Source, Left 4 Dead 2, etc.
+
+Yes, you can use SourceMod to offload calculations (use threading), but we talking about common game logic.
+E.g. you can try use `DoS Protection extension <https://forums.alliedmods.net/showpost.php?p=2518787&postcount=117>`_, but caching is not fast solution, cause server spent time to receiving and sending answer from cache.
+
+This solution allow redirect some (A2S query) packets to backend and game server don't spent time to answer anymore.
+
+
 Credits
 -------
 
