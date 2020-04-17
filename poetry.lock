@@ -589,6 +589,17 @@ version = "2.2.0"
 pytest = ">=3.0.0"
 
 [[package]]
+category = "dev"
+description = "py.test plugin that allows you to add environment variables."
+name = "pytest-env"
+optional = false
+python-versions = "*"
+version = "0.6.2"
+
+[package.dependencies]
+pytest = ">=2.6.0"
+
+[[package]]
 category = "main"
 description = "Add .env support to your django/flask apps in development and deployments"
 name = "python-dotenv"
@@ -749,7 +760,7 @@ docs = ["sphinx", "jaraco.packaging (>=3.2)", "rst.linker (>=1.9)"]
 testing = ["jaraco.itertools", "func-timeout"]
 
 [metadata]
-content-hash = "e3cca99a587f4a8bcd15646a78fd05507978d779726b3762779cc68f26315e57"
+content-hash = "32640fb4d5562ad53957b2bb5b49199bfa11fa2f62af91caf645fe2fae845865"
 python-versions = "^3.7"
 
 [metadata.files]
@@ -997,6 +1008,9 @@ pytest-cov = [
 pytest-deadfixtures = [
     {file = "pytest-deadfixtures-2.2.0.tar.gz", hash = "sha256:4fa7c7031c3229be551a206b5128aec2d816dd7148b0d963b0086108ccaae080"},
     {file = "pytest_deadfixtures-2.2.0-py2.py3-none-any.whl", hash = "sha256:16be27beadf0e13af06b0e89476664b03e57d0875913856e74fb35b30cbcca22"},
+]
+pytest-env = [
+    {file = "pytest-env-0.6.2.tar.gz", hash = "sha256:7e94956aef7f2764f3c147d216ce066bf6c42948bb9e293169b1b1c880a580c2"},
 ]
 python-dotenv = [
     {file = "python-dotenv-0.12.0.tar.gz", hash = "sha256:92b3123fb2d58a284f76cc92bfe4ee6c502c32ded73e8b051c4f6afc8b6751ed"},

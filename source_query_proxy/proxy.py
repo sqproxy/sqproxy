@@ -60,7 +60,7 @@ class QueryProxy:
 
         self.listen_addr = listen_addr
         self.server_addr = server_addr
-        self.resp_cache = AwaitableDict()
+        self.resp_cache = {}
         self.our_a2s_challenge = random.randint(1, MAX_SIZE_32)
         self.settings = settings
         self.logger = logging.getLogger(name)
@@ -83,7 +83,11 @@ class QueryProxy:
                     )
                     continue
 
-                response = await self.get_response_for(request)
+                response = self.get_response_for(request)
+                if response is None:
+                    self.logger.warning('No response for %s', request)
+                    continue
+
                 await listening.send_packet(response, addr=addr)
 
     async def update_server_query_cache(self):
@@ -201,26 +205,23 @@ class QueryProxy:
 
                 logger.debug('Connection expired. Closing')
 
-    async def get_response_for(self, message) -> typing.Optional[bytes]:
+    def get_response_for(self, message) -> typing.Optional[bytes]:
         resp = None
 
         if isinstance(message, messages.InfoRequest):
-            resp = await self.resp_cache.get_wait('a2s_info')
+            resp = self.resp_cache.get('a2s_info')
         elif isinstance(message, (messages.PlayersRequest, messages.RulesRequest)):
             challenge = message['challenge']
 
             if challenge == self.our_a2s_challenge:
                 if isinstance(message, messages.PlayersRequest):
-                    resp = await self.resp_cache.get_wait('a2s_players')
+                    resp = self.resp_cache.get('a2s_players')
                 elif isinstance(message, messages.RulesRequest):
-                    resp = await self.resp_cache.get_wait('a2s_rules')
+                    resp = self.resp_cache.get('a2s_rules')
             elif self.our_a2s_challenge != self.A2S_EMPTY_CHALLENGE:
                 # player request challenge number or we don't know who is it
                 # return challenge number
                 resp = messages.GetChallengeResponse(challenge=self.our_a2s_challenge).encode()
-
-        if resp is None:
-            raise NotImplementedError
 
         return resp
 
@@ -234,3 +235,14 @@ class QueryProxy:
 
         for task in pending:
             task.cancel()
+
+    async def wait_ready(self):
+        """Wait until all internals being ready to start
+        """
+        resp_cache = self.resp_cache = AwaitableDict(self.resp_cache)
+
+        await resp_cache.get_wait('a2s_info')
+        await resp_cache.get_wait('a2s_players')
+        await resp_cache.get_wait('a2s_rules')
+
+        self.resp_cache = dict(resp_cache)
