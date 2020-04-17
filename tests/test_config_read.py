@@ -59,7 +59,8 @@ def _dummy_config(conf_d_globals, conf_d_dummy_game):
         yield
 
 
-def test_global_defaults_injected(_dummy_config):
+@pytest.mark.usefixtures('_dummy_config')
+def test_global_defaults_injected():
     assert config.settings.get_merged_config_data()['servers'] == {
         'MyLittleServer': {
             'network': {
@@ -95,5 +96,6 @@ ebpf:
     indirect=True,
 )
 @pytest.mark.xfail(raises=config.ConfigurationError)
-def test_ebpf_cant_be_configured_twice(_dummy_config, conf_d_dummy_game):
+@pytest.mark.usefixtures('_dummy_config')
+def test_ebpf_cant_be_configured_twice(conf_d_dummy_game):
     assert config.settings.merged_config_data['ebpf'] == {'enabled': False}
