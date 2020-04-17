@@ -145,6 +145,8 @@ async def test_proxy_info(game_server_proxy, game_server_mock, a2s_info_cache_li
     assert game_server_proxy.resp_cache.get('a2s_info') is None
     assert game_server_mock.received_counter[messages.InfoRequest] == 0
 
+    await game_server_proxy.wait_ready()
+
     client = await connect(('127.0.0.1', 27915))
 
     cache_misses = a2s_info_cache_lifetime == CACHE_MISS_LIFETIME
@@ -157,11 +159,10 @@ async def test_proxy_info(game_server_proxy, game_server_mock, a2s_info_cache_li
         assert isinstance(message, messages.InfoResponse)
         assert game_server_mock.info_response == game_server_proxy.resp_cache['a2s_info'] == data
 
-    expected_counter = 1
     if cache_misses:
-        expected_counter += 1
-
-    assert game_server_mock.received_counter[messages.InfoRequest] == expected_counter
+        assert game_server_mock.received_counter[messages.InfoRequest] > 1
+    else:
+        assert game_server_mock.received_counter[messages.InfoRequest] == 1
 
 
 @pytest.mark.parametrize(
@@ -170,6 +171,8 @@ async def test_proxy_info(game_server_proxy, game_server_mock, a2s_info_cache_li
 async def test_proxy_rules(game_server_proxy, game_server_mock, a2s_rules_cache_lifetime):
     assert game_server_proxy.resp_cache.get('a2s_rules') is None
     assert game_server_mock.received_counter[messages.RulesRequest] == 0
+
+    await game_server_proxy.wait_ready()
 
     client = await connect(('127.0.0.1', 27915))
 
@@ -183,14 +186,11 @@ async def test_proxy_rules(game_server_proxy, game_server_mock, a2s_rules_cache_
         assert isinstance(message, messages.RulesResponse)
         assert game_server_mock.rules_response == game_server_proxy.resp_cache['a2s_rules'] == data
 
-    # Challenge request + Real request
-    expected_counter = 2
     if cache_misses:
-        # У прокси уже есть challenge number
-        # Поэтому он отправит запрос сразу
-        expected_counter += 1
-
-    assert game_server_mock.received_counter[messages.RulesRequest] == expected_counter
+        assert game_server_mock.received_counter[messages.RulesRequest] > 2
+    else:
+        # Challenge request + Real request
+        assert game_server_mock.received_counter[messages.RulesRequest] == 2
 
 
 @pytest.mark.parametrize(
@@ -199,6 +199,8 @@ async def test_proxy_rules(game_server_proxy, game_server_mock, a2s_rules_cache_
 async def test_proxy_players(game_server_proxy, game_server_mock, a2s_players_cache_lifetime):
     assert game_server_proxy.resp_cache.get('a2s_players') is None
     assert game_server_mock.received_counter[messages.PlayersRequest] == 0
+
+    await game_server_proxy.wait_ready()
 
     client = await connect(('127.0.0.1', 27915))
 
@@ -212,11 +214,8 @@ async def test_proxy_players(game_server_proxy, game_server_mock, a2s_players_ca
         assert isinstance(message, messages.PlayersResponse)
         assert game_server_mock.players_response == game_server_proxy.resp_cache['a2s_players'] == data
 
-    # Challenge request + Real request
-    expected_counter = 2
     if cache_misses:
-        # У прокси уже есть challenge number
-        # Поэтому он отправит запрос сразу
-        expected_counter += 1
-
-    assert game_server_mock.received_counter[messages.PlayersRequest] == expected_counter
+        assert game_server_mock.received_counter[messages.PlayersRequest] > 2
+    else:
+        # Challenge request + Real request
+        assert game_server_mock.received_counter[messages.PlayersRequest] == 2
