@@ -24,18 +24,24 @@ async def _run_servers():
         logger.warning('No one server to run. Please check config')
         return
 
-    coros = []
+    proxies = []
     for name, server in config.servers:
         # TODO: import QueryProxy implementation and use it
-        coros.append(QueryProxy(server, name=name).run())
+        proxy = QueryProxy(server, name=name)
+        proxies.append(proxy)
+
+    futures = [asyncio.ensure_future(proxy.run()) for proxy in proxies]
 
     if config.ebpf and config.ebpf.enabled:
         logger.info('eBPF redirection enabled')
-        coros.append(run_ebpf_redirection())
+        logger.info('Wait all proxies to be ready ...')
+        await asyncio.gather(*[proxy.wait_ready() for proxy in proxies],)
+        logger.info('Wait all proxies to be ready ... Done!')
+        futures.append(asyncio.ensure_future(run_ebpf_redirection()))
     else:
         logger.info('eBPF redirection disabled')
 
-    await asyncio.gather(*coros)
+    await asyncio.gather(*futures)
 
 
 if __name__ == '__main__':
