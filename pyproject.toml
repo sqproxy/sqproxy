@@ -30,7 +30,7 @@ bumpversion = "^0.5.3"
 unify = "^0.5"
 flake8-awesome = "^1.2"
 black = "^19.10b0"
-pytest-cov = "^2.6"
+pytest-cov = "^2.9"
 pytest-deadfixtures = "^2.1.0"
 pytest-env = "^0.6.2"
 
