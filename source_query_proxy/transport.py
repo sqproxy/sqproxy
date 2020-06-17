@@ -19,7 +19,7 @@ class UnknownRequest(Exception):
     pass
 
 
-class BrokenPacketError(Exception):  # FIXME?
+class BrokenPacketError(Exception):  # FIXME: message is app layer and packet is transport layer
     def __init__(self, raw_data, addr):
         self.raw_data = raw_data
         self.addr = addr
