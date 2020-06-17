@@ -83,6 +83,10 @@ class QueryProxy:
                     )
                     continue
 
+                if addr[1] == 0:
+                    # FIXME: https://github.com/MagicStack/uvloop/issues/338
+                    continue
+
                 response = self.get_response_for(request)
                 if response is None:
                     self.logger.warning('No response for %s', request)
