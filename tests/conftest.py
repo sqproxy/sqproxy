@@ -3,6 +3,7 @@ import logging
 import socket
 
 import pytest
+import uvloop
 
 
 @pytest.fixture(params=['INET'])
@@ -35,6 +36,8 @@ def challenge():
 @pytest.yield_fixture()
 def event_loop():
     from asyncio import runners
+
+    uvloop.install()
 
     loop = asyncio.new_event_loop()
     yield loop
