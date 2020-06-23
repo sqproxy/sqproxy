@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 import socket
 
 import pytest
@@ -11,7 +12,9 @@ def addr_family(request):
     if request.param == 'INET':
         return ('0.0.0.0', 0), socket.AF_INET
     elif request.param == 'INET6':
-        return ('::', 0), socket.AF_INET6
+        if os.getenv('TRAVIS') == 'true':
+            pytest.skip('Travis-CI IPv6 will fail permanently')
+        return ('::1', 0), socket.AF_INET6
     raise NotImplementedError
 
 
