@@ -39,6 +39,13 @@ servers:
     network:
       server_port: 27015
       bind_port: 27815
+'''
+
+
+@pytest.fixture()
+def conf_d_dummy_game2():
+    return '''
+servers:
   MyVeryBigServer:
     network:
       server_port: 27016
@@ -47,11 +54,12 @@ servers:
 
 
 @pytest.fixture()
-def _dummy_config(conf_d_globals, conf_d_dummy_game):
+def _dummy_config(conf_d_globals, conf_d_dummy_game, conf_d_dummy_game2):
     with tempfile.TemporaryDirectory() as directory:
         directory = pathlib.Path(directory)
         directory.joinpath('00-globals.yaml').write_text(conf_d_globals)
         directory.joinpath('01-dummy-game.yaml').write_text(conf_d_dummy_game)
+        directory.joinpath('02-dummy-game.yaml').write_text(conf_d_dummy_game2)
         os.environ['SQPROXY_DEBUG_LOG_ENABLED'] = 'false'
         os.environ['SQPROXY_CONFDIR_0'] = directory.as_posix()
         os.environ['SQPROXY_CONFDIR_1'] = 'unknown'
