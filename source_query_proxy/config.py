@@ -141,7 +141,7 @@ def load_configs(paths: typing.Iterable[pathlib.Path]):
 
     whole_config = {}
     for config in configs:
-        whole_config.update(config)
+        whole_config = dict_merge(whole_config, config)
 
     return whole_config
 
