@@ -110,7 +110,7 @@ def iter_config_files(*confdirs):
             logger.warning('Confdir expected to be a directory, not a file: %s', confdir.absolute().as_posix())
             continue
 
-        for file in confdir.iterdir():
+        for file in sorted(confdir.iterdir(), key=lambda f: f.name):
             if file.is_file() and file.name.endswith('.yaml'):
                 logger.info('Found config: %s', file.as_posix())
                 yield file
