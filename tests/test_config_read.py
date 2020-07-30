@@ -1,6 +1,7 @@
 import os
 import pathlib
 import tempfile
+from unittest.mock import create_autospec
 
 import pytest
 
@@ -65,6 +66,35 @@ def _dummy_config(conf_d_globals, conf_d_dummy_game, conf_d_dummy_game2):
         os.environ['SQPROXY_CONFDIR_1'] = 'unknown'
         config.setup()
         yield
+
+
+def test_config_files_iterated_in_ascending_order():
+    """listdir return paths in arbitrary order, we need expected order
+    """
+
+    def make_fake_config_file(name):
+        obj = create_autospec(pathlib.Path)
+        obj.is_file.return_value = True
+        obj.name = name
+        obj.as_posix.return_value = f'/as/posix/{obj.name}'
+        return obj
+
+    arbitrary_ordered_files = [
+        make_fake_config_file('10.yaml'),
+        make_fake_config_file('arbitrary.yaml'),
+        make_fake_config_file('01.yaml'),
+    ]
+
+    fake_dir = create_autospec(pathlib.Path)
+    fake_dir.exists.return_value = True
+    fake_dir.is_dir.return_value = True
+    fake_dir.iterdir.side_effect = lambda: iter(arbitrary_ordered_files)
+
+    assert [f.name for f in config.iter_config_files(fake_dir)] == [
+        '01.yaml',
+        '10.yaml',
+        'arbitrary.yaml',
+    ]
 
 
 @pytest.mark.usefixtures('_dummy_config')
