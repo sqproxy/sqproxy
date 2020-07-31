@@ -425,7 +425,7 @@ description = "Pidfile featuring stale detection and file-locking, can also be u
 name = "pid"
 optional = false
 python-versions = "*"
-version = "3.0.3"
+version = "3.0.4"
 
 [package.dependencies]
 psutil = ">=5.4.8"
@@ -939,8 +939,8 @@ pep8-naming = [
     {file = "pep8_naming-0.10.0-py2.py3-none-any.whl", hash = "sha256:5d9f1056cb9427ce344e98d1a7f5665710e2f20f748438e308995852cfa24164"},
 ]
 pid = [
-    {file = "pid-3.0.3-py2.py3-none-any.whl", hash = "sha256:16a57105bd9a270d7f686899abe5f36a558489ee2e85f512a227b92f31ec69f2"},
-    {file = "pid-3.0.3.tar.gz", hash = "sha256:925b61c35b6f2bc6b43075f493e99792f1473575a0beeb85bcf7de1d6a4a3c7d"},
+    {file = "pid-3.0.4-py2.py3-none-any.whl", hash = "sha256:af2bf11c5d637bba8a80ce3368279c5eca28f08e201ac828538e1b9ad9e35ef9"},
+    {file = "pid-3.0.4.tar.gz", hash = "sha256:0e33670e83f6a33ebb0822e43a609c3247178d4a375ff50a4689e266d853eb66"},
 ]
 pluggy = [
     {file = "pluggy-0.13.1-py2.py3-none-any.whl", hash = "sha256:966c145cd83c96502c3c3868f50408687b38434af77734af1e9ca461a4081d2d"},
