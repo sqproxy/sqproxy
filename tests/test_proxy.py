@@ -119,6 +119,7 @@ async def game_server_proxy(
     proxy = QueryProxy(
         ServerModel(
             **{
+                'meta': {},
                 'network': {
                     'server_ip': server_ip,
                     'server_port': server_port,

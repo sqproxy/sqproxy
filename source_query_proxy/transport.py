@@ -3,6 +3,7 @@ import itertools
 import logging
 import math
 import random
+import typing
 
 import pylru
 from asyncio_dgram.aio import DatagramStream
@@ -118,23 +119,23 @@ class SourceDatagramStream(DatagramStream):
         """
         return await self.recv()
 
-    @staticmethod
-    def _decode(packet, msg_classes):
-        header = messages.Header.decode(packet)
-        packet = header.raw_tail
-
-        for cls in msg_classes:
-            msg = cls.decode(packet, default=None)
-            if msg is not None:
-                return msg
-
-        return None
-
     async def __aenter__(self):
         return self
 
     async def __aexit__(self, exc_type, exc, tb):
         self.close()
+
+
+def decode_packet(packet, msg_classes):
+    header = messages.Header.decode(packet)
+    packet = header.raw_tail
+
+    for cls in msg_classes:
+        msg = cls.decode(packet, default=None)
+        if msg is not None:
+            return msg
+
+    return None
 
 
 class SourceDatagramServer(SourceDatagramStream):
@@ -145,7 +146,7 @@ class SourceDatagramServer(SourceDatagramStream):
     )
 
     def decode_request(self, packet):
-        return self._decode(packet, msg_classes=self.request_message_classes)
+        return decode_packet(packet, msg_classes=self.request_message_classes)
 
     async def recv_packet(self):
         try:
@@ -166,7 +167,7 @@ class SourceDatagramClient(SourceDatagramStream):
     )
 
     def decode_response(self, packet):
-        return self._decode(packet, msg_classes=self.response_message_classes)
+        return decode_packet(packet, msg_classes=self.response_message_classes)
 
     async def recv_packet(self):
         while True:
@@ -179,13 +180,17 @@ class SourceDatagramClient(SourceDatagramStream):
             return message, data, addr
 
 
-async def bind(addr) -> SourceDatagramServer:
+SourceDatagramServerType = typing.TypeVar('SourceDatagramServerType', bound=SourceDatagramServer)
+
+
+async def bind(addr, *, cls: typing.Type[SourceDatagramServerType] = None) -> SourceDatagramServerType:
     """
     Bind a socket to a local address for datagrams.  The socket will be either
     AF_INET or AF_INET6 depending upon the type of address specified.
 
     @param addr - For AF_INET or AF_INET6, a tuple with the the host and port to
                   to bind; port may be set to 0 to get any free port.
+    @param cls  - implementation of server SourceDatagram protocol
     @return     - A SourceDatagramServer instance
     """
     loop = asyncio.get_event_loop()
@@ -197,16 +202,23 @@ async def bind(addr) -> SourceDatagramServer:
         lambda: Protocol(recvq, excq, drained), local_addr=addr, reuse_address=False
     )
 
-    return SourceDatagramServer(transport, recvq, excq, drained)
+    if cls is None:
+        cls = SourceDatagramServer
+
+    return cls(transport, recvq, excq, drained)
 
 
-async def connect(addr) -> SourceDatagramClient:
+SourceDatagramClientType = typing.TypeVar('SourceDatagramClientType', bound=SourceDatagramClient)
+
+
+async def connect(addr, *, cls: typing.Type[SourceDatagramClientType] = None) -> SourceDatagramClientType:
     """
     Connect a socket to a remote address for datagrams.  The socket will be
     either AF_INET or AF_INET6 depending upon the type of host specified.
 
     @param addr - For AF_INET or AF_INET6, a tuple with the the host and port to
                   to connect to.
+    @param cls  - implementation of client SourceDatagram protocol
     @return     - A SourceDatagramClient instance
     """
     loop = asyncio.get_event_loop()
@@ -216,4 +228,7 @@ async def connect(addr) -> SourceDatagramClient:
 
     transport, protocol = await loop.create_datagram_endpoint(lambda: Protocol(recvq, excq, drained), remote_addr=addr)
 
-    return SourceDatagramClient(transport, recvq, excq, drained)
+    if cls is None:
+        cls = SourceDatagramClient
+
+    return cls(transport, recvq, excq, drained)

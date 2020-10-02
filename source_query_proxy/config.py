@@ -1,3 +1,4 @@
+import importlib.util
 import logging
 import pathlib
 import typing
@@ -9,11 +10,20 @@ from pydantic import AnyHttpUrl
 from pydantic import BaseModel
 from pydantic import BaseSettings
 from pydantic import Extra
+from pydantic import validator
 from sentry_sdk.integrations.logging import LoggingIntegration
 
 from . import __version__
 from .dict_merge import dict_merge
 from .logging import setup_logging
+
+if typing.TYPE_CHECKING:
+    from .proxy import QueryProxy
+
+    QueryProxyType = typing.TypeVar('QueryProxyType', bound=QueryProxy)
+else:
+    QueryProxyType = None
+
 
 __all__ = (
     'NetworkModel',
@@ -39,16 +49,61 @@ class NetworkModel(BaseModel):
         extra = Extra.forbid
 
 
+class EntrypointModel(BaseModel):
+    """Allow override proxy server entrypoint
+    """
+
+    path: str  #: path to callable which should return :class:`QueryProxy`-based object
+    obj: typing.Optional[typing.Callable[..., QueryProxyType]] = None
+
+    class Config:
+        extra = Extra.forbid
+
+    @validator('obj', always=True)
+    def _import_obj(cls, v, values):
+        if v is not None:
+            return v
+
+        path: str = values['path']
+        if ':' not in path:
+            raise ValueError(f'entry not found, expected path(s): example.py:MyObj, example:MyObj. Given: {path}')
+
+        file_path, _, attr_name = path.rpartition(':')
+
+        if not file_path.isidentifier():
+            file_path = pathlib.Path(file_path).resolve()
+            spec = importlib.util.spec_from_file_location('entrypoint', file_path)
+            module = importlib.util.module_from_spec(spec)
+            module.__loader__.exec_module(module)  # noqa
+        else:
+            module = importlib.import_module(file_path)
+
+        try:
+            return getattr(module, attr_name)
+        except AttributeError as exc:
+            raise AttributeError(exc.args[0].replace("'entrypoint'", f"'{file_path}'"))
+
+
 class ServerModel(BaseModel):
+    meta: dict
     network: NetworkModel
     a2s_info_cache_lifetime: int = 5
     a2s_rules_cache_lifetime: int = 5
     a2s_players_cache_lifetime: int = 1
     src_query_port_lifetime: int = 10
     no_a2s_rules: bool = False
+    entrypoint: typing.Optional[EntrypointModel] = None
+
+    @validator('entrypoint', pre=True)
+    def _entrypoint(cls, v, values):
+        if isinstance(v, str):
+            v = {'path': v}
+
+        v['path'] = v['path'].format_map(values['meta'])
+        return v
 
     class Config:
-        extra = Extra.forbid
+        extra = Extra.allow
 
 
 class EBPFModel(BaseModel):
@@ -137,6 +192,10 @@ def load_configs(paths: typing.Iterable[pathlib.Path]):
                 global_defaults.append(config_defaults)
 
             if config:
+                meta = {'CONFPATH': path, 'CONFDIR': path.parent}
+                for server in (config.get('servers') or {}).values():
+                    server['meta'] = meta
+
                 configs.append(config)
 
     whole_config = {}
