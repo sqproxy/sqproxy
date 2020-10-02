@@ -1,5 +1,6 @@
 import asyncio
 import collections
+import functools
 import logging
 import random
 import time
@@ -50,6 +51,8 @@ class AwaitableDict(collections.UserDict):
 
 class QueryProxy:
     A2S_EMPTY_CHALLENGE = -1
+    connect = functools.partial(connect)
+    bind = functools.partial(bind)
 
     def __init__(self, settings: config.ServerModel, name: str = None):
         listen_addr = (str(settings.network.bind_ip), settings.network.bind_port)
@@ -71,10 +74,10 @@ class QueryProxy:
         return backoff.on_exception(backoff.constant, asyncio.TimeoutError, logger=self.logger)
 
     async def listen_client_requests(self):
-        self.logger.debug('Binding ... ')
-        async with (await bind(self.listen_addr)) as listening:
-            self.logger.debug('Binding ... done!')
-            self.logger.debug('Listening started!')
+        self.logger.info('Binding ... ')
+        async with (await self.bind(self.listen_addr)) as listening:
+            self.logger.info('Binding ... done!')
+            self.logger.info('Listen for client requests ...')
             while True:
                 request, data, addr = await listening.recv_packet()
                 if request is None:

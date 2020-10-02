@@ -26,8 +26,12 @@ async def _run_servers():
 
     proxies = []
     for name, server in config.servers:
-        # TODO: import QueryProxy implementation and use it
-        proxy = QueryProxy(server, name=name)
+        if server.entrypoint is None:
+            entrypoint = QueryProxy
+        else:
+            entrypoint = server.entrypoint.obj
+
+        proxy = entrypoint(server, name=name)
         proxies.append(proxy)
 
     futures = [asyncio.ensure_future(proxy.run()) for proxy in proxies]

@@ -1,6 +1,7 @@
 import os
 import pathlib
 import tempfile
+from unittest.mock import ANY
 from unittest.mock import create_autospec
 
 import pytest
@@ -101,6 +102,7 @@ def test_config_files_iterated_in_ascending_order():
 def test_global_defaults_injected():
     assert config.settings.get_merged_config_data()['servers'] == {
         'MyLittleServer': {
+            'meta': ANY,
             'network': {
                 'server_ip': '192.168.1.1',
                 'bind_ip': '192.168.1.1',
@@ -111,6 +113,7 @@ def test_global_defaults_injected():
             'src_query_port_lifetime': 10,
         },
         'MyVeryBigServer': {
+            'meta': ANY,
             'network': {
                 'server_ip': '192.168.1.1',
                 'bind_ip': '192.168.1.1',

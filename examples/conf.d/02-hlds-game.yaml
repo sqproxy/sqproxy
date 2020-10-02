@@ -1,0 +1,17 @@
+servers:
+  HLDS-Server:
+    # entrypoint allow you re-implement basic QueryProxy class
+    # proper values for entrypoint is:
+    #   - 'path/to/python/file.py:ClassObject'
+    #   - 'python_module:ClassObject'  (python_module will be imported like any other)
+    # Also you can refer any callable object (e.g. function) instead python class
+    # only one rule is matter - this should return QueryProxy instance.
+    # CONFDIR point to directory where this file placed
+    # !!! Attention, CONFDIR value will be merged like other options
+    # and will contains the last configuration file path
+    # Currently only {CONFDIR} placeholder are available
+    entrypoint: '{CONFDIR}/dummy_hlds_entrypoint.py:DummyHLDSProxy'
+    network:
+      server_port: 27015
+      bind_port: 30015
+    no_a2s_rules: true
