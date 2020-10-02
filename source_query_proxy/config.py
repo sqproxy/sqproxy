@@ -119,9 +119,8 @@ class Settings(BaseSettings):
     sentry_dsn: typing.Optional[AnyHttpUrl] = None
     confdir_0: pathlib.Path = '/etc/sqproxy/conf.d/'
     confdir_1: pathlib.Path = './conf.d/'
-    error_log: pathlib.Path = '/var/log/sqproxy/error.log'
-    debug_log: pathlib.Path = '/var/log/sqproxy/debug.log'
-    debug_log_enabled: bool = False
+    error_log: pathlib.Path = '/dev/null'
+    loglevel: str = 'INFO'
     piddir: typing.Optional[pathlib.Path] = None
 
     class Config:
@@ -130,6 +129,13 @@ class Settings(BaseSettings):
 
     def get_merged_config_data(self):
         return load_configs(iter_config_files(self.confdir_0, self.confdir_1))
+
+    @validator('loglevel')
+    def _check_loglevel(cls, v):
+        from logging import _checkLevel  # noqa
+
+        _checkLevel(v)
+        return v
 
 
 def _apply_defaults(target, defaults):
@@ -222,11 +228,7 @@ def setup(settings_: Settings = None):
             dsn=settings.sentry_dsn, integrations=[sentry_logging], release=__version__,
         )
 
-    debug_filename = settings.debug_log_enabled and settings.debug_log.as_posix() or None
-
-    setup_logging(
-        debug_filename=debug_filename, error_filename=settings.error_log.as_posix(),
-    )
+    setup_logging(error_filename=settings.error_log.as_posix(),)
 
     if settings.sentry_dsn:
         logger.debug('Sentry enabled')

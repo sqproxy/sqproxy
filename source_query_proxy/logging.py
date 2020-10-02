@@ -1,6 +1,7 @@
 import logging.config
 import logging.handlers
 import os
+import sys
 
 
 class BetterRotatingFileHandler(logging.handlers.RotatingFileHandler):
@@ -10,6 +11,22 @@ class BetterRotatingFileHandler(logging.handlers.RotatingFileHandler):
 
 
 def get_file_handler_opts(filename: str, level: str):
+    if filename == '/dev/null':
+        return {
+            'class': 'logging.NullHandler',
+            'level': level,
+        }
+
+    if filename.startswith('/dev/'):
+        filename = filename.rstrip('/')
+        stream = {'/dev/stderr': sys.stderr, '/dev/stdout': sys.stdout}[filename]
+        return {
+            'class': 'logging.StreamHandler',
+            'stream': stream,
+            'level': level,
+            'formatter': 'verbose',
+        }
+
     return {
         'class': BetterRotatingFileHandler.__module__ + '.' + BetterRotatingFileHandler.__qualname__,
         'maxBytes': 1024 * 1024,
@@ -20,10 +37,7 @@ def get_file_handler_opts(filename: str, level: str):
     }
 
 
-def setup_logging(debug_filename: str = None, error_filename: str = None):
-    if debug_filename is None:
-        debug_filename = '/dev/null'
-
+def setup_logging(loglevel=logging.INFO, error_filename: str = None):
     if error_filename is None:
         error_filename = '/dev/null'
 
@@ -44,14 +58,13 @@ def setup_logging(debug_filename: str = None, error_filename: str = None):
                 },
                 'console': {
                     'class': 'logging.StreamHandler',
-                    'level': 'DEBUG',
+                    'level': loglevel,
                     'formatter': 'verbose',
                 },
-                'debug_file': get_file_handler_opts(debug_filename, 'DEBUG'),
                 'error_file': get_file_handler_opts(error_filename, 'ERROR'),
             },
             'loggers': {
-                '': {'handlers': ['console', 'debug_file', 'error_file'], 'level': 'DEBUG', 'propagate': False},
+                '': {'handlers': ['console', 'error_file'], 'level': 'DEBUG', 'propagate': False},
                 'PidFile': {'handlers': ['null'], 'propagate': False},
             },
         }
