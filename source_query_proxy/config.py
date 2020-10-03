@@ -44,6 +44,7 @@ class NetworkModel(BaseModel):
     server_port: int
     bind_ip: IPv4Address
     bind_port: int
+    ebpf_no_redirect: bool = False
 
     class Config:
         extra = Extra.forbid

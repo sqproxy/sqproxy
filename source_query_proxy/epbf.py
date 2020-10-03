@@ -45,7 +45,8 @@ def get_ebpf_program_run_args():
                 'Different interfaces dont supported yet: ' f'{server_interface} != {interface}'
             )
 
-        args += ['-p', f'{server.network.server_port}:{server.network.bind_port}']
+        if not server.network.ebpf_no_redirect:
+            args += ['-p', f'{server.network.server_port}:{server.network.bind_port}']
 
     if interface is not None:
         args += ['-i', interface]
