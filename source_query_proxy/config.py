@@ -109,7 +109,7 @@ class ServerModel(BaseModel):
 
 class EBPFModel(BaseModel):
     enabled: bool = False
-    executable: str = 'python2'
+    executable: typing.Union[str, typing.List[str]] = 'python2'
     script_path: pathlib.Path = './src-ebpf/redirect.py'
 
     class Config:
