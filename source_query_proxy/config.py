@@ -229,7 +229,7 @@ def setup(settings_: Settings = None):
             dsn=settings.sentry_dsn, integrations=[sentry_logging], release=__version__,
         )
 
-    setup_logging(error_filename=settings.error_log.as_posix(),)
+    setup_logging(loglevel=settings.loglevel, error_filename=settings.error_log.as_posix())
 
     if settings.sentry_dsn:
         logger.debug('Sentry enabled')
