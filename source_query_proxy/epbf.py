@@ -59,14 +59,18 @@ async def run_ebpf_redirection():
     if not isinstance(executable, list):
         executable = [executable]
 
-    args = [config.ebpf.script_path.name]
+    cwd = None
+    args = []
+
+    if config.ebpf.script_path is not None:
+        args.append(config.ebpf.script_path.name)
+        cwd = config.ebpf.script_path.parent.as_posix()
+
     args += get_ebpf_program_run_args()
 
     logger.info('Run %s', executable + args)
 
-    process = await asyncio.create_subprocess_exec(
-        *executable, *args, stdout=asyncio.subprocess.PIPE, cwd=config.ebpf.script_path.parent.as_posix(),
-    )
+    process = await asyncio.create_subprocess_exec(*executable, *args, stdout=asyncio.subprocess.PIPE, cwd=cwd)
 
     while True:
         data = await process.stdout.readline()
