@@ -16,6 +16,8 @@ from .transport import connect
 
 MAX_SIZE_32 = 2 ** 31 - 1
 
+NO_RESPONSE = object()
+
 
 class AwaitableDict(collections.UserDict):
     """Оборачивает все значения в asyncio.Future
@@ -90,9 +92,11 @@ class QueryProxy:
                     # FIXME: https://github.com/MagicStack/uvloop/issues/338
                     continue
 
-                response = self.get_response_for(request)
+                response = self.get_response_for(request, None)
                 if response is None:
                     self.logger.warning('No response for %s', request)
+                    continue
+                elif response is NO_RESPONSE:
                     continue
 
                 await listening.send_packet(response, addr=addr)
@@ -215,8 +219,8 @@ class QueryProxy:
 
                 logger.debug('Connection expired. Closing')
 
-    def get_response_for(self, message) -> typing.Optional[bytes]:
-        resp = None
+    def get_response_for(self, message, default) -> typing.Optional[bytes]:
+        resp = default
 
         if isinstance(message, messages.InfoRequest):
             resp = self.resp_cache.get('a2s_info')
