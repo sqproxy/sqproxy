@@ -14,6 +14,14 @@ defaults:
       server_ip: '78.139.77.165'
       # IP address for listening incoming queries
       bind_ip: '0.0.0.0'
+      # Real game server PORT (respect to server_ip)
+      server_port: 0  # don't set in globals, only for doc here
+      # PORT for listening incoming queries (respect to bind_ip)
+      bind_port: 0  # don't set in globals, only for doc here
+      # False (default) - queries from `server_port` will be redirected to `bind_port`
+      # only for auto-ebpf handling, for more info see `ebpf` section below
+      # True - disable redirection (useful for just proxying and debug purposes)
+      ebpf_no_redirect: false
     # How often update A2S_INFO data
     a2s_info_cache_lifetime: 5
     # How often update A2S_RULES data
