@@ -16,7 +16,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: changelog
-        uses: ScottBrenner/generate-changelog-action@1.0.0
+        uses: ScottBrenner/generate-changelog-action@master
         id: Changelog
         env:
           REPO: ${{ github.repository }}
