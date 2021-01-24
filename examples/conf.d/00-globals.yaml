@@ -31,7 +31,7 @@ defaults:
     # How often change src port for queries to Real Game Server
     # Some games required that due integrated ddos protection
     # Without it sqporxy ip:port will be "banned" for queries
-    src_query_port_lifetime: 10
+    src_query_port_lifetime: 1
 
     # False (default) - no action, A2S_RULES will work
     # True - don't update A2S_RULES cache
