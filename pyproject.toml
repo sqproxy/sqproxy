@@ -10,7 +10,7 @@ keywords = ['valve', 'source', 'engine', 'proxy', 'query', 'cache']
 
 [tool.poetry.dependencies]
 python = "^3.7"
-uvloop = "0.14.0"
+uvloop = "0.15.0"
 pylru = "^1.2.0"
 pydantic = {extras = ["dotenv"], version = "^1.4"}
 pyyaml = "^5.2"
