@@ -7,39 +7,38 @@ defaults:
   # False - applied only for current file
   # conf.d/ files read sequentially by alphabetical order
   # we recommend start config names with sequential value: 00-globals.yaml, 01-game1.yaml, 02-game2.yaml
-  global: True
-  values:
-    network:
-      # Real game server IP address
-      server_ip: '78.139.77.165'
-      # IP address for listening incoming queries
-      bind_ip: '0.0.0.0'
-      # Real game server PORT (respect to server_ip)
-      server_port: 0  # don't set in globals, only for doc here
-      # PORT for listening incoming queries (respect to bind_ip)
-      bind_port: 0  # don't set in globals, only for doc here
-      # False (default) - queries from `server_port` will be redirected to `bind_port`
-      # only for auto-ebpf handling, for more info see `ebpf` section below
-      # True - disable redirection (useful for just proxying and debug purposes)
-      ebpf_no_redirect: false
-    # How often update A2S_INFO data
-    a2s_info_cache_lifetime: 5
-    # How often update A2S_RULES data
-    a2s_rules_cache_lifetime: 5
-    # How often update A2S_PLAYERS data
-    a2s_players_cache_lifetime: 1
-    # How often change src port for queries to Real Game Server
-    # Some games required that due integrated ddos protection
-    # Without it sqporxy ip:port will be "banned" for queries
-    src_query_port_lifetime: 1
+  __global__: True
+  network:
+    # Real game server IP address
+    server_ip: '78.139.77.165'
+    # IP address for listening incoming queries
+    bind_ip: '0.0.0.0'
+    # Real game server PORT (respect to server_ip)
+    server_port: 0  # don't set in globals, only for doc here
+    # PORT for listening incoming queries (respect to bind_ip)
+    bind_port: 0  # don't set in globals, only for doc here
+    # False (default) - queries from `server_port` will be redirected to `bind_port`
+    # only for auto-ebpf handling, for more info see `ebpf` section below
+    # True - disable redirection (useful for just proxying and debug purposes)
+    ebpf_no_redirect: false
+  # How often update A2S_INFO data
+  a2s_info_cache_lifetime: 5
+  # How often update A2S_RULES data
+  a2s_rules_cache_lifetime: 5
+  # How often update A2S_PLAYERS data
+  a2s_players_cache_lifetime: 1
+  # How often change src port for queries to Real Game Server
+  # Some games required that due integrated ddos protection
+  # Without it sqporxy ip:port will be "banned" for queries
+  src_query_port_lifetime: 1
 
-    # False (default) - no action, A2S_RULES will work
-    # True - don't update A2S_RULES cache
-    # This will be helpful for HLDS servers which protocol is different
-    # But be careful, you also need disable redirection for A2S_RULES packets
-    # see the IS_QUERY_REQUEST_PACKET in https://github.com/spumer/source-query-proxy-kernel-module/blob/master/src-ebpf/utils.h
-    # CS:GO also has broken A2S_RULES, but fix available at https://forums.alliedmods.net/showthread.php?t=236521
-    no_a2s_rules: false
+  # False (default) - no action, A2S_RULES will work
+  # True - don't update A2S_RULES cache
+  # This will be helpful for HLDS servers which protocol is different
+  # But be careful, you also need disable redirection for A2S_RULES packets
+  # see the IS_QUERY_REQUEST_PACKET in https://github.com/spumer/source-query-proxy-kernel-module/blob/master/src-ebpf/utils.h
+  # CS:GO also has broken A2S_RULES, but fix available at https://forums.alliedmods.net/showthread.php?t=236521
+  no_a2s_rules: false
 
 
 # See 01-dummy-game.yaml

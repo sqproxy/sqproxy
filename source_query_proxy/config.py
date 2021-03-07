@@ -6,6 +6,7 @@ from ipaddress import IPv4Address
 
 import sentry_sdk
 import yaml
+from cached_property import cached_property
 from pydantic import AnyHttpUrl
 from pydantic import BaseModel
 from pydantic import BaseSettings
@@ -116,6 +117,9 @@ class EBPFModel(BaseModel):
         extra = Extra.forbid
 
 
+NamedServersType = typing.List[typing.Tuple[str, ServerModel]]
+
+
 class Settings(BaseSettings):
     sentry_dsn: typing.Optional[AnyHttpUrl] = None
     confdir_0: pathlib.Path = '/etc/sqproxy/conf.d/'
@@ -127,6 +131,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = '.env'
         env_prefix = 'SQPROXY_'
+        keep_untouched = (cached_property,)
 
     def get_merged_config_data(self):
         return load_configs(iter_config_files(self.confdir_0, self.confdir_1))
@@ -137,6 +142,23 @@ class Settings(BaseSettings):
 
         _checkLevel(v)
         return v
+
+    @cached_property
+    def servers(self) -> typing.Optional[NamedServersType]:
+        merged_config_data = self.get_merged_config_data()
+
+        servers = merged_config_data.get('servers')
+        if servers:
+            servers = [(name, ServerModel.parse_obj(server)) for name, server in servers.items()]
+
+        return servers
+
+    @cached_property
+    def ebpf(self) -> typing.Optional[EBPFModel]:
+        ebpf = self.get_merged_config_data().get('ebpf')
+        if not ebpf:
+            return None
+        return EBPFModel.parse_obj(ebpf)
 
 
 def _apply_defaults(target, defaults):
@@ -154,10 +176,10 @@ def _get_config(data: dict, global_defaults) -> typing.Tuple[typing.Dict, typing
 
     for server in servers_data.values():
         for g_defaults in global_defaults:
-            _apply_defaults(server, g_defaults['values'])
+            _apply_defaults(server, g_defaults)
 
-        if defaults and defaults.get('values'):
-            _apply_defaults(server, defaults['values'])
+        if defaults:
+            _apply_defaults(server, defaults)
 
     return data, defaults
 
@@ -195,7 +217,7 @@ def load_configs(paths: typing.Iterable[pathlib.Path]):
                     raise ConfigurationError('eBPF already configured')
                 ebpf_configured = True
 
-            if config_defaults.get('global', False):
+            if config_defaults.pop('__global__', False):
                 global_defaults.append(config_defaults)
 
             if config:
@@ -212,9 +234,9 @@ def load_configs(paths: typing.Iterable[pathlib.Path]):
     return whole_config
 
 
-def setup(settings_: Settings = None):
+def setup(settings_: Settings = None, reread: bool = False):
     global settings
-    if settings_ is None:
+    if settings_ is None or reread:
         logger.info('Re-read settings')
         settings_ = Settings()
 
@@ -236,22 +258,16 @@ def setup(settings_: Settings = None):
     else:
         logger.debug('Sentry disabled')
 
-    merged_config_data = settings.get_merged_config_data()
-
-    servers_ = merged_config_data.get('servers')
-    if servers_:
-        global servers
-        servers = [(name, ServerModel.parse_obj(server)) for name, server in servers_.items()]
-
-    ebpf_ = merged_config_data.get('ebpf')
-    if ebpf_:
-        global ebpf
-        ebpf = EBPFModel.parse_obj(ebpf_)
-
 
 settings = Settings()
-servers = None  # type: typing.Optional[typing.List[typing.Tuple[str, ServerModel]]]
-ebpf = None  # type: typing.Optional[EBPFModel]
-
 
 setup(settings)
+
+
+def __getattr__(name):
+    if name == 'ebpf':
+        return settings.ebpf
+    elif name == 'servers':
+        return settings.servers
+    else:
+        raise AttributeError(name)

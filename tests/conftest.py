@@ -36,7 +36,7 @@ def challenge():
     return 0xBEEF
 
 
-@pytest.yield_fixture()
+@pytest.fixture()
 def event_loop():
     from asyncio import runners
 

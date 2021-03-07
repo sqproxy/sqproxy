@@ -13,13 +13,12 @@ from source_query_proxy import config
 def conf_d_globals():
     return '''
 defaults:
-  global: True
-  values:
-    network:
-      server_ip: '192.168.1.1'
-      bind_ip: '192.168.1.1'
-    a2s_info_cache_lifetime: 5
-    src_query_port_lifetime: 10
+  __global__: True
+  network:
+    server_ip: '192.168.1.1'
+    bind_ip: '192.168.1.1'
+  a2s_info_cache_lifetime: 5
+  src_query_port_lifetime: 10
 
 # See 01-dummy-game.yaml
 servers:
@@ -65,7 +64,12 @@ def _dummy_config(conf_d_globals, conf_d_dummy_game, conf_d_dummy_game2):
         os.environ['SQPROXY_DEBUG_LOG_ENABLED'] = 'false'
         os.environ['SQPROXY_CONFDIR_0'] = directory.as_posix()
         os.environ['SQPROXY_CONFDIR_1'] = 'unknown'
-        config.setup()
+        config.setup(reread=True)
+
+        # Touch lazy props
+        # ensure parsing is correct
+        _ = config.ebpf
+        _ = config.servers
         yield
 
 
@@ -139,4 +143,4 @@ ebpf:
 @pytest.mark.xfail(raises=config.ConfigurationError)
 @pytest.mark.usefixtures('_dummy_config')
 def test_ebpf_cant_be_configured_twice(conf_d_dummy_game):
-    assert config.settings.merged_config_data['ebpf'] == {'enabled': False}
+    assert config.settings.get_merged_config_data()['ebpf'] == {'enabled': False}

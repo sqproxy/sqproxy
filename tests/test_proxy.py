@@ -27,21 +27,21 @@ async def server(addr_family):
 @pytest.fixture(params=['default'])
 def a2s_info_cache_lifetime(request) -> int:
     if request.param == 'default':
-        return ServerModel.__field_defaults__['a2s_info_cache_lifetime']
+        return ServerModel.__fields__['a2s_info_cache_lifetime'].get_default()
     return request.param
 
 
 @pytest.fixture(params=['default'])
 def a2s_rules_cache_lifetime(request) -> int:
     if request.param == 'default':
-        return ServerModel.__field_defaults__['a2s_rules_cache_lifetime']
+        return ServerModel.__fields__['a2s_rules_cache_lifetime'].get_default()
     return request.param
 
 
 @pytest.fixture(params=['default'])
 def a2s_players_cache_lifetime(request) -> int:
     if request.param == 'default':
-        return ServerModel.__field_defaults__['a2s_players_cache_lifetime']
+        return ServerModel.__fields__['a2s_players_cache_lifetime'].get_default()
     return request.param
 
 
