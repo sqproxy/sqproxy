@@ -109,13 +109,13 @@ class SourceDatagramStream(DatagramStream):
 
     async def send_bytes(self, data, addr=None):
         """Alias for `send()`, use it instead `send()`
-         to explicit difference from `send_packet()`
+        to explicit difference from `send_packet()`
         """
         return await self.send(data, addr)
 
     async def recv_bytes(self):
         """Alias for `recv()`, use it instead `recv()`
-         to explicit difference from `recv_packet()`
+        to explicit difference from `recv_packet()`
         """
         return await self.recv()
 

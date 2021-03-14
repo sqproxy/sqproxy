@@ -39,7 +39,9 @@ async def _run_servers():
     if config.ebpf and config.ebpf.enabled:
         logger.info('eBPF redirection enabled')
         logger.info('Wait all proxies to be ready ...')
-        await asyncio.gather(*[proxy.wait_ready() for proxy in proxies],)
+        await asyncio.gather(
+            *[proxy.wait_ready() for proxy in proxies],
+        )
         logger.info('Wait all proxies to be ready ... Done!')
         futures.append(asyncio.ensure_future(run_ebpf_redirection()))
     else:

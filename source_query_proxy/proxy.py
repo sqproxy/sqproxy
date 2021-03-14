@@ -84,7 +84,8 @@ class QueryProxy:
                 request, data, addr = await listening.recv_packet()
                 if request is None:
                     self.logger.warning(
-                        'Broken data was received: data[:150]=%s', data[:150],
+                        'Broken data was received: data[:150]=%s',
+                        data[:150],
                     )
                     continue
 
@@ -141,7 +142,9 @@ class QueryProxy:
             if isinstance(message, messages.GetChallengeResponse):
                 if old_challenge is not self.A2S_EMPTY_CHALLENGE:
                     self.logger.warning(
-                        'Challenge number changed: %s -> %s', old_challenge, message['challenge'],
+                        'Challenge number changed: %s -> %s',
+                        old_challenge,
+                        message['challenge'],
                     )
 
                 a2s_challenge = message['challenge']
@@ -189,7 +192,9 @@ class QueryProxy:
                 while get_time() < connection_eta:
                     request = messages.RulesRequest(challenge=a2s_challenge)
                     message, data, addr, a2s_challenge = await self.send_recv_packet(
-                        client, request, timeout=connection_lifetime,
+                        client,
+                        request,
+                        timeout=connection_lifetime,
                     )
                     self.resp_cache['a2s_rules'] = data
                     await asyncio.sleep(self.settings.a2s_rules_cache_lifetime)
@@ -211,7 +216,9 @@ class QueryProxy:
                 while get_time() < connection_eta:
                     request = messages.PlayersRequest(challenge=a2s_challenge)
                     message, data, addr, a2s_challenge = await self.send_recv_packet(
-                        client, request, timeout=connection_lifetime,
+                        client,
+                        request,
+                        timeout=connection_lifetime,
                     )
 
                     self.resp_cache['a2s_players'] = data
@@ -241,7 +248,8 @@ class QueryProxy:
 
     async def run(self):
         done, pending = await asyncio.wait(
-            [self.update_server_query_cache(), self.listen_client_requests()], return_when=asyncio.FIRST_COMPLETED,
+            [self.update_server_query_cache(), self.listen_client_requests()],
+            return_when=asyncio.FIRST_COMPLETED,
         )
         for task in done:
             exc = task.exception() if not task.cancelled() else None
@@ -251,8 +259,7 @@ class QueryProxy:
             task.cancel()
 
     async def wait_ready(self):
-        """Wait until all internals being ready to start
-        """
+        """Wait until all internals being ready to start"""
         resp_cache = self.resp_cache = AwaitableDict(self.resp_cache)
 
         await resp_cache.get_wait('a2s_info')

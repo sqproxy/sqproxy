@@ -101,7 +101,11 @@ class GameServerMock:
 
 @pytest.fixture()
 async def game_server_mock(
-    event_loop, server, rust_info_response_bytes, rust_rules_response_bytes, rust_players_response_bytes,
+    event_loop,
+    server,
+    rust_info_response_bytes,
+    rust_rules_response_bytes,
+    rust_players_response_bytes,
 ):
     game_server = GameServerMock(rust_info_response_bytes, rust_players_response_bytes, rust_rules_response_bytes)
     task = event_loop.create_task(game_server.run(server))
@@ -113,7 +117,11 @@ async def game_server_mock(
 
 @pytest.fixture()
 async def game_server_proxy(
-    event_loop, game_server_mock, a2s_info_cache_lifetime, a2s_players_cache_lifetime, a2s_rules_cache_lifetime,
+    event_loop,
+    game_server_mock,
+    a2s_info_cache_lifetime,
+    a2s_players_cache_lifetime,
+    a2s_rules_cache_lifetime,
 ):
     server_ip, server_port = game_server_mock.server.sockname
     proxy = QueryProxy(
@@ -140,7 +148,10 @@ async def game_server_proxy(
 
 
 @pytest.mark.parametrize(
-    'a2s_info_cache_lifetime', ['default', CACHE_MISS_LIFETIME], ids=['cache hit', 'cache misses'], indirect=True,
+    'a2s_info_cache_lifetime',
+    ['default', CACHE_MISS_LIFETIME],
+    ids=['cache hit', 'cache misses'],
+    indirect=True,
 )
 async def test_proxy_info(game_server_proxy, game_server_mock, a2s_info_cache_lifetime):
     assert game_server_proxy.resp_cache.get('a2s_info') is None
@@ -167,7 +178,10 @@ async def test_proxy_info(game_server_proxy, game_server_mock, a2s_info_cache_li
 
 
 @pytest.mark.parametrize(
-    'a2s_rules_cache_lifetime', ['default', CACHE_MISS_LIFETIME], ids=['cache hit', 'cache misses'], indirect=True,
+    'a2s_rules_cache_lifetime',
+    ['default', CACHE_MISS_LIFETIME],
+    ids=['cache hit', 'cache misses'],
+    indirect=True,
 )
 async def test_proxy_rules(game_server_proxy, game_server_mock, a2s_rules_cache_lifetime):
     assert game_server_proxy.resp_cache.get('a2s_rules') is None
@@ -195,7 +209,10 @@ async def test_proxy_rules(game_server_proxy, game_server_mock, a2s_rules_cache_
 
 
 @pytest.mark.parametrize(
-    'a2s_players_cache_lifetime', ['default', CACHE_MISS_LIFETIME], ids=['cache hit', 'cache misses'], indirect=True,
+    'a2s_players_cache_lifetime',
+    ['default', CACHE_MISS_LIFETIME],
+    ids=['cache hit', 'cache misses'],
+    indirect=True,
 )
 async def test_proxy_players(game_server_proxy, game_server_mock, a2s_players_cache_lifetime):
     assert game_server_proxy.resp_cache.get('a2s_players') is None
