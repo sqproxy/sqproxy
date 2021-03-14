@@ -12,11 +12,14 @@ defaults:
     # Real game server IP address
     server_ip: '78.139.77.165'
     # IP address for listening incoming queries
-    bind_ip: '0.0.0.0'
+    # by default is equal to server_ip, can be omitted (null) or equal to '0.0.0.0'
+    bind_ip: null
     # Real game server PORT (respect to server_ip)
     server_port: 0  # don't set in globals, only for doc here
     # PORT for listening incoming queries (respect to bind_ip)
-    bind_port: 0  # don't set in globals, only for doc here
+    # by default first available port will be used
+    # can be omitted (null) or specified; zero (0) is equal to first available port
+    bind_port: 0
     # False (default) - queries from `server_port` will be redirected to `bind_port`
     # only for auto-ebpf handling, for more info see `ebpf` section below
     # True - disable redirection (useful for just proxying and debug purposes)

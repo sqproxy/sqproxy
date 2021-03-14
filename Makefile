@@ -36,7 +36,7 @@ lint:  ## Проверка кода (linting)
 	$(BIN)python -m pytest --dead-fixtures --dup-fixtures
 
 pretty:  ## Автоформатирование согласно code-style
-	$(BIN)isort --apply --recursive $(CODE) tests
+	$(BIN)isort $(CODE) tests
 	$(BIN)black --target-version=py37 --skip-string-normalization --line-length=120 $(CODE) tests
 	$(BIN)unify --in-place --recursive $(CODE) tests
 

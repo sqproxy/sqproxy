@@ -59,3 +59,8 @@ def _check_no_errors(caplog):
         messages = [x.message for x in caplog.get_records(when) if x.levelno >= logging.ERROR]
         if messages:
             pytest.fail(f'error messages encountered during testing: {messages!r}')
+
+
+pytest_plugins = [
+    'tests.fixtures.config',
+]

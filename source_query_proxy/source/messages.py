@@ -87,17 +87,17 @@ class MessageField(object):
 
     def __init__(self, name, optional=False, default_value=None, validators=None):
         """
-            name -- used when decoding messages to set the key in the
-                returned dictionary
+        name -- used when decoding messages to set the key in the
+            returned dictionary
 
-            optional -- whether or not a field value must be provided
-                when encoding
+        optional -- whether or not a field value must be provided
+            when encoding
 
-            default_value -- if optional is False, the value that is
-                used if none is specified
+        default_value -- if optional is False, the value that is
+            used if none is specified
 
-            validators -- list of callables that return False if the
-                value they're passed is invalid
+        validators -- list of callables that return False if the
+            value they're passed is invalid
         """
 
         if validators is None:
@@ -140,20 +140,20 @@ class MessageField(object):
     @needs_buffer
     def decode(self, buffer, values=None):
         """
-            Accepts a string of raw bytes which it will attempt to
-            decode into some Python object which is returned. All
-            remaining data left in the buffer is also returned which
-            may be an empty string.
+        Accepts a string of raw bytes which it will attempt to
+        decode into some Python object which is returned. All
+        remaining data left in the buffer is also returned which
+        may be an empty string.
 
-            Also acecpts a second argument which is a dictionary of the
-            fields that have been decoded so far (i.e. occurs before
-            this field in `fields` tuple). This allows the decoder to
-            adapt it's funtionality based on the value of other fields
-            if needs be.
+        Also acecpts a second argument which is a dictionary of the
+        fields that have been decoded so far (i.e. occurs before
+        this field in `fields` tuple). This allows the decoder to
+        adapt it's funtionality based on the value of other fields
+        if needs be.
 
-            For example, in the case of A2S_PLAYER resposnes, the field
-            `player_count` needs to be accessed at decode-time to determine
-            how many player entries to attempt to decode.
+        For example, in the case of A2S_PLAYER resposnes, the field
+        `player_count` needs to be accessed at decode-time to determine
+        how many player entries to attempt to decode.
         """
 
         field_size = struct.calcsize(self.format)
@@ -231,31 +231,31 @@ class IpAddrField(LongFieldBE):
 
 class MessageArrayField(MessageField):
     """
-        Represents a nested message within another message that is
-        repeated a given number of time (often defined within the
-        same message.)
+    Represents a nested message within another message that is
+    repeated a given number of time (often defined within the
+    same message.)
     """
 
     def __init__(self, name, element, count=None):
         """
-            element -- the Message subclass that will attempt to be decoded
+        element -- the Message subclass that will attempt to be decoded
 
-            count -- ideally a callable that returns the number of
-                'elements' to attempt to decode; count must also present
-                a 'minimum' attribute which is minimum number of elements
-                that must be decoded or else raise BrokenMessageError
+        count -- ideally a callable that returns the number of
+            'elements' to attempt to decode; count must also present
+            a 'minimum' attribute which is minimum number of elements
+            that must be decoded or else raise BrokenMessageError
 
-                If count isn't callable (e.g. a number) it will be
-                wrapped in a function with the minimum attribute set
-                equal to the given 'count' value
+            If count isn't callable (e.g. a number) it will be
+            wrapped in a function with the minimum attribute set
+            equal to the given 'count' value
 
-                Helper static methods all(), value_of() and at_least()
-                are provided which are intended to be used as the
-                'count' argument, e.g.
+            Helper static methods all(), value_of() and at_least()
+            are provided which are intended to be used as the
+            'count' argument, e.g.
 
-                MessageArrayField("", SubMessage, MessageArrayField.all())
+            MessageArrayField("", SubMessage, MessageArrayField.all())
 
-                ... will decode all SubMessages within the buffer
+            ... will decode all SubMessages within the buffer
         """
 
         MessageField.__init__(self, name)
@@ -265,7 +265,7 @@ class MessageArrayField(MessageField):
         # in most cases count would be a Message.value_of(), however
         # if an integer is provided it will be wrapped in a lambda.
         self.count = count
-        if not hasattr(count, '__call__'):
+        if not hasattr(count, '__call__'):  # noqa: B004
 
             def const_count(values=None):
                 return count
@@ -342,7 +342,7 @@ class MessageArrayField(MessageField):
     @staticmethod
     def value_of(name):
         """
-            Reference another field's value as the argument 'count'.
+        Reference another field's value as the argument 'count'.
         """
 
         def field(values, f=None):
@@ -355,15 +355,15 @@ class MessageArrayField(MessageField):
     @staticmethod
     def all():
         """
-            Decode as much as possible from the buffer.
+        Decode as much as possible from the buffer.
 
-            Note that if a full element field cannot be decoded it will
-            return all entries decoded up to that point, and reset the
-            buffer to the start of the entry which raised the
-            BufferExhaustedError. So it is possible to have addtional
-            fields follow a MessageArrayField and have
-            count=MessageArrayField.all() as long as the size of the
-            trailing fields < size of the MessageArrayField element.
+        Note that if a full element field cannot be decoded it will
+        return all entries decoded up to that point, and reset the
+        buffer to the start of the entry which raised the
+        BufferExhaustedError. So it is possible to have addtional
+        fields follow a MessageArrayField and have
+        count=MessageArrayField.all() as long as the size of the
+        trailing fields < size of the MessageArrayField element.
         """
 
         i = [1]
@@ -378,7 +378,7 @@ class MessageArrayField(MessageField):
     @staticmethod
     def at_least(minimum):
         """
-            Decode at least 'minimum' number of entries.
+        Decode at least 'minimum' number of entries.
         """
 
         i = [1]
@@ -393,19 +393,19 @@ class MessageArrayField(MessageField):
 
 class MessageDictField(MessageArrayField):
     """
-        Decodes a series of key-value pairs from a message. Functionally
-        identical to MessageArrayField except the results are returned as
-        a dictionary instead of a list.
+    Decodes a series of key-value pairs from a message. Functionally
+    identical to MessageArrayField except the results are returned as
+    a dictionary instead of a list.
     """
 
     def __init__(self, name, key_field, value_field, count=None):
         """
-            key_field and value_field are the respective components
-            of the name-value pair that are to be decoded. The fields
-            should have unique name strings. Tt is assumed that the
-            key-field comes first, followed by the value.
+        key_field and value_field are the respective components
+        of the name-value pair that are to be decoded. The fields
+        should have unique name strings. Tt is assumed that the
+        key-field comes first, followed by the value.
 
-            count is the same as MessageArrayField.
+        count is the same as MessageArrayField.
         """
 
         element = type('KeyValueField', (Message,), {'fields': (key_field, value_field)})
@@ -443,6 +443,9 @@ class Message(collections.abc.MutableMapping):
 
     def __iter__(self):
         return iter(self.values)
+
+    def __repr__(self):
+        return f'{self.__class__}({self.values})'
 
     def encode(self, **field_values):
         values = dict(self.values, **field_values)

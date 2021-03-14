@@ -11,10 +11,12 @@ from pydantic import AnyHttpUrl
 from pydantic import BaseModel
 from pydantic import BaseSettings
 from pydantic import Extra
+from pydantic import conint
 from pydantic import validator
 from sentry_sdk.integrations.logging import LoggingIntegration
 
 from . import __version__
+from . import utils
 from .dict_merge import dict_merge
 from .logging import setup_logging
 
@@ -42,18 +44,37 @@ class ConfigurationError(Exception):
 
 class NetworkModel(BaseModel):
     server_ip: IPv4Address
-    server_port: int
-    bind_ip: IPv4Address
-    bind_port: int
+    server_port: conint(ge=1, le=65535)
+    bind_ip: typing.Optional[IPv4Address] = None
+    bind_port: typing.Optional[conint(ge=0, le=65535)] = 0
     ebpf_no_redirect: bool = False
 
     class Config:
         extra = Extra.forbid
 
+    @validator('bind_ip', always=True)
+    def _set_default_bind_ip(cls, bind_ip, values):
+        if not bind_ip:
+            bind_ip = values['server_ip']
+
+        return bind_ip
+
+    @validator('bind_port', always=True)
+    def _set_default_bind_port(cls, bind_port, values):
+        if bind_port is None or bind_port == 0:
+            server_port = values['server_port']
+
+            if utils.is_port_available(server_port + 800):
+                # try to use pretty port
+                bind_port = server_port + 800
+            else:
+                bind_port = utils.get_available_port()
+
+        return bind_port
+
 
 class EntrypointModel(BaseModel):
-    """Allow override proxy server entrypoint
-    """
+    """Allow override proxy server entrypoint"""
 
     path: str  #: path to callable which should return :class:`QueryProxy`-based object
     obj: typing.Optional[typing.Callable[..., QueryProxyType]] = None
@@ -133,7 +154,8 @@ class Settings(BaseSettings):
         env_prefix = 'SQPROXY_'
         keep_untouched = (cached_property,)
 
-    def get_merged_config_data(self):
+    @cached_property
+    def merged_config_data(self):
         return load_configs(iter_config_files(self.confdir_0, self.confdir_1))
 
     @validator('loglevel')
@@ -144,18 +166,18 @@ class Settings(BaseSettings):
         return v
 
     @cached_property
-    def servers(self) -> typing.Optional[NamedServersType]:
-        merged_config_data = self.get_merged_config_data()
+    def servers(self) -> NamedServersType:
+        merged_config_data = self.merged_config_data
 
         servers = merged_config_data.get('servers')
         if servers:
             servers = [(name, ServerModel.parse_obj(server)) for name, server in servers.items()]
 
-        return servers
+        return servers or []
 
     @cached_property
     def ebpf(self) -> typing.Optional[EBPFModel]:
-        ebpf = self.get_merged_config_data().get('ebpf')
+        ebpf = self.merged_config_data.get('ebpf')
         if not ebpf:
             return None
         return EBPFModel.parse_obj(ebpf)
@@ -166,8 +188,7 @@ def _apply_defaults(target, defaults):
 
 
 def _get_config(data: dict, global_defaults) -> typing.Tuple[typing.Dict, typing.Dict]:
-    """Get full and ready to use config
-    """
+    """Get full and ready to use config"""
     defaults = data.pop('defaults', None) or {}
 
     servers_data = data.get('servers')
@@ -248,7 +269,9 @@ def setup(settings_: Settings = None, reread: bool = False):
             event_level=logging.ERROR,  # Send errors as events
         )
         sentry_sdk.init(
-            dsn=settings.sentry_dsn, integrations=[sentry_logging], release=__version__,
+            dsn=settings.sentry_dsn,
+            integrations=[sentry_logging],
+            release=__version__,
         )
 
     setup_logging(loglevel=settings.loglevel, error_filename=settings.error_log.as_posix())

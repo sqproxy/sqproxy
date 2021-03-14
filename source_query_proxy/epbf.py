@@ -14,28 +14,27 @@ logger = logging.getLogger(__name__)
 def _get_addr_interface(addr: IPv4Address):
     ipdb = pyroute2.IPDB()
     for idx, addresses in ipdb.ipaddr.items():
-        for ifaddr, prefix in addresses:
+        for ifaddr, _prefix in addresses:
             if ip_address(ifaddr) == addr:
                 return ipdb.by_index[idx]['ifname']
     return None
 
 
-def get_ebpf_program_run_args():
+def get_ebpf_program_run_args():  # noqa: C901
     args = []
 
-    wide_interface_warned = False
+    is_wide = False
     interface = None
-    for server_name, server in config.servers:
-        if str(server.network.bind_ip) == '0.0.0.0':
+    for _server_name, server in config.settings.servers:
+        bind_ip = server.network.bind_ip
+
+        if str(bind_ip) == '0.0.0.0':
             server_interface = None
-            if not wide_interface_warned:
-                logger.warning(
-                    "Wide interface is not supported yet. '0.0.0.0' will be interpreted like 'default interface'"
-                )
-                wide_interface_warned = True
+            is_wide = True
         else:
-            server_interface = _get_addr_interface(server.network.bind_ip)
-            assert server_interface is not None, f"Can't get interface name for {server.network.bind_ip}"
+            server_interface = _get_addr_interface(bind_ip)
+            if server_interface is None:
+                raise AssertionError(f"Can't get interface name for {bind_ip}")
 
         if interface is None:
             interface = server_interface
@@ -45,8 +44,19 @@ def get_ebpf_program_run_args():
                 'Different interfaces dont supported yet: ' f'{server_interface} != {interface}'
             )
 
+        server_port = server.network.server_port
+        bind_port = server.network.bind_port
+
         if not server.network.ebpf_no_redirect:
-            args += ['-p', f'{server.network.server_port}:{server.network.bind_port}']
+            if is_wide:
+                arg = f'{server_port}:{bind_port}'
+            else:
+                arg = f'{bind_ip}:{server_port}:{bind_port}'
+
+            args += ['-p', arg]
+
+    if is_wide:
+        logger.warning("Wide interface is not supported yet. '0.0.0.0' will be interpreted like 'default interface'")
 
     if interface is not None:
         args += ['-i', interface]
