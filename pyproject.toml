@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "source-query-proxy"
-version = "1.4.0"
+version = "2.0.0"
 description = "Async proxy for Source Engine Query Protocol"
 authors = ["spumer <spumer-tm@yandex.ru>"]
 license = "GPL-3.0"
