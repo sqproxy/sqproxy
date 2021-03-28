@@ -33,6 +33,7 @@ __all__ = (
     'ServerModel',
     'Settings',
     'ConfigurationError',
+    'settings',
 )
 
 logger = logging.getLogger('sqproxy.config')
@@ -187,8 +188,33 @@ def _apply_defaults(target, defaults):
     target.update(dict_merge(defaults, target))
 
 
+def _get_old_config(data: dict, global_defaults) -> typing.Tuple[typing.Dict, typing.Dict]:
+    """Get full and ready to use config"""
+    defaults = data.pop('defaults', None) or {}
+
+    servers_data = data.get('servers')
+    if not servers_data:
+        return data, defaults
+
+    for server in servers_data.values():
+        for g_defaults in global_defaults:
+            _apply_defaults(server, g_defaults['values'])
+
+        if defaults and defaults.get('values'):
+            _apply_defaults(server, defaults['values'])
+
+    return data, defaults
+
+
 def _get_config(data: dict, global_defaults) -> typing.Tuple[typing.Dict, typing.Dict]:
     """Get full and ready to use config"""
+    if 'global' in (data.get('defaults') or {}):
+        data, defaults = _get_old_config(data, global_defaults)
+        is_global = defaults.pop('global')
+        defaults = defaults['values']
+        defaults['__global__'] = is_global
+        return data, defaults
+
     defaults = data.pop('defaults', None) or {}
 
     servers_data = data.get('servers')
@@ -280,6 +306,8 @@ def setup(settings_: Settings = None, reread: bool = False):
         logger.debug('Sentry enabled')
     else:
         logger.debug('Sentry disabled')
+
+    return settings
 
 
 settings = Settings()

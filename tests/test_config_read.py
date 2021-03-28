@@ -9,7 +9,21 @@ from source_query_proxy import config as sqproxy_config
 from source_query_proxy import utils
 
 
-def test_config_files_iterated_in_ascending_order():
+@pytest.fixture(params=['current', 'old'], autouse=True)
+def config_mode(request):
+    if request.param is None:
+        # noop: allow ignore this fixture due: https://github.com/pytest-dev/pytest/issues/4666
+        return None
+
+    if request.param == 'current':
+        return request.getfixturevalue('conf_d_globals')
+    else:
+        assert request.param == 'old'
+        return request.getfixturevalue('_old_style_conf_d_globals')
+
+
+@pytest.mark.parametrize('config_mode', [None], indirect=True)
+def test_config_files_iterated_in_ascending_order(config_mode):
     """listdir return paths in arbitrary order, we need expected order"""
 
     def make_fake_config_file(name):
@@ -63,19 +77,16 @@ def test_global_defaults_injected(config):
     }
 
 
-@pytest.mark.parametrize(
-    'conf_d_dummy_game1',
-    [
+def test_ebpf_cant_be_configured_twice(config_manager, conf_d_globals):
+    config_manager.add_config(
+        '01-redefine-ebpf-block.yaml',
         '''
 ebpf:
   enabled: True
-'''
-    ],
-    indirect=True,
-)
-@pytest.mark.xfail(raises=sqproxy_config.ConfigurationError)
-def test_ebpf_cant_be_configured_twice(config, conf_d_dummy_game1):
-    assert config.settings.merged_config_data['ebpf'] == {'enabled': False}
+''',
+    )
+    with pytest.raises(sqproxy_config.ConfigurationError), config_manager.setup():
+        ...
 
 
 @pytest.mark.parametrize('global_bind_ip', [None], indirect=True, ids=['no-global-bind-ip'])
