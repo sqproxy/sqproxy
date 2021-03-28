@@ -50,14 +50,12 @@ servers:
 
 # Automatically run eBPF redirection
 ebpf:
-  # Download any release of SQProxy Kernel Module
-  # And add path to `redirect.py`
-  # https://github.com/spumer/source-query-proxy-kernel-module/releases
-  # If you want run it without root privileges, see: https://github.com/spumer/source-query-proxy-kernel-module/tree/master/src-ebpf#non-root-running
+  # Install any release of SQRedirect
+  # https://github.com/sqproxy/sqredirect/releases
+  # If you want run it without root privileges, see: https://github.com/sqproxy/sqredirect#non-root-running
   # and make sure executable prepended with 'sudo':
   #   executable:
   #     - 'sudo'
-  #     - 'python2'
+  #     - 'sqredirect'
   enabled: False
-  executable: 'python2'
-  script_path: './src-ebpf/redirect.py'
+  executable: 'sqredirect'
