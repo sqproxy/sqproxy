@@ -14,11 +14,12 @@ E.g. you can try use `DoS Protection extension <https://forums.alliedmods.net/sh
 This solution allow redirect some (A2S query) packets to backend and game server don't spent time to answer anymore.
 
 
-Credits
--------
+IPTables (or any NAT) can't help!
+---------------------------------
 
-Source Engine messages inspired by **Python-valve**
-https://github.com/serverstf/python-valve
+If you use IPTables (NAT) to redirect queries to proxy, this rule will be remembered in routing table and if client try to connect - connection will be redirected to proxy too.
+
+We use right way to redirect - eBPF: https://github.com/sqproxy/sqredirect
 
 Prerequisites
 -------------
@@ -53,15 +54,11 @@ Run
 Run with eBPF
 -------------
 
-https://github.com/spumer/source-query-proxy-kernel-module/tree/master/src-ebpf
+Please read the instruction and install: https://github.com/sqproxy/sqredirect
 
-1. Download eBPF script and copy ``src-ebpf`` folder to target working directory
+1. Enable eBPF in config (see examples/00-globals.yaml)
 
-2. Install requirements https://github.com/spumer/source-query-proxy-kernel-module/tree/master/src-ebpf/README.md
-
-3. Enable eBPF in config (see examples/00-globals.yaml)
-
-4. Run
+2. Run
 
 .. code-block:: bash
 
@@ -76,3 +73,11 @@ Development
     git clone https://github.com/spumer/source-query-proxy.git
     cd source-query-proxy
     poetry install
+    
+
+Credits
+-------
+
+Source Engine messages inspired by **Python-valve**
+https://github.com/serverstf/python-valve
+
