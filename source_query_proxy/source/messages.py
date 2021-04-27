@@ -518,24 +518,35 @@ class InfoResponse(Packet):
         PlatformField('platform'),
         ByteField('password_protected'),  # BooleanField
         ByteField('vac_enabled'),  # BooleanField
-        StringField('version')
+        StringField('version'),
         # TODO: EDF
     )
 
 
 class GetChallengeResponse(Packet):
 
-    fields = (ByteField('response_type', True, 0x41, validators=[lambda x: x == 0x41]), LongFieldLE('challenge'))
+    fields = (
+        ByteField('response_type', True, 0x41, validators=[lambda x: x == 0x41]),
+        LongFieldLE('challenge'),
+    )
 
 
 class PlayersRequest(Packet):
 
-    fields = (ByteField('request_type', True, 0x55, validators=[lambda x: x == 0x55]), LongFieldLE('challenge'))
+    fields = (
+        ByteField('request_type', True, 0x55, validators=[lambda x: x == 0x55]),
+        LongFieldLE('challenge'),
+    )
 
 
 class PlayerEntry(Packet):
 
-    fields = (ByteField('index'), StringField('name'), LongFieldLE('score'), FloatField('duration'))
+    fields = (
+        ByteField('index'),
+        StringField('name'),
+        LongFieldLE('score'),
+        FloatField('duration'),
+    )
 
 
 class PlayersResponse(Packet):
@@ -549,7 +560,10 @@ class PlayersResponse(Packet):
 
 class RulesRequest(Packet):
 
-    fields = (ByteField('request_type', True, 0x56, validators=[lambda x: x == 0x56]), LongFieldLE('challenge'))
+    fields = (
+        ByteField('request_type', True, 0x56, validators=[lambda x: x == 0x56]),
+        LongFieldLE('challenge'),
+    )
 
 
 class RulesResponse(Packet):
@@ -563,7 +577,12 @@ class RulesResponse(Packet):
         # LongFieldLE("long"),
         ByteField('response_type', validators=[lambda x: x == 0x45]),
         ShortFieldLE('rule_count'),
-        MessageDictField('rules', StringField('key'), StringField('value'), MessageArrayField.value_of('rule_count')),
+        MessageDictField(
+            'rules',
+            StringField('key'),
+            StringField('value'),
+            MessageArrayField.value_of('rule_count'),
+        ),
     )
 
 
@@ -589,7 +608,10 @@ class MasterServerRequest(Packet):
 
 class MSAddressEntry(Message):
 
-    fields = (MSAddressEntryIPField('host'), MSAddressEntryPortField('port'))
+    fields = (
+        MSAddressEntryIPField('host'),
+        MSAddressEntryPortField('port'),
+    )
 
     @property
     def is_null(self):
@@ -603,5 +625,9 @@ class MasterServerResponse(Packet):
         # and can be ignored.
         MSAddressEntryIPField('start_host'),
         MSAddressEntryPortField('start_port'),
-        MessageArrayField('addresses', MSAddressEntry, MessageArrayField.all()),
+        MessageArrayField(
+            'addresses',
+            MSAddressEntry,
+            MessageArrayField.all(),
+        ),
     )
