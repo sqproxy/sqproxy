@@ -158,73 +158,65 @@ class QueryProxy:
         logger = self.logger.getChild('update-info')
         request = messages.InfoRequest().encode()
 
-        get_time = asyncio.get_event_loop().time
-        connection_lifetime = self.settings.src_query_port_lifetime
         while True:
-            connection_eta = get_time() + connection_lifetime
-
             async with (await connect(self.server_addr)) as client:
                 logger.debug('Connected to %s (client port=%s)', self.server_addr, client.sockname[1])
 
-                while get_time() < connection_eta:
-                    await client.send_packet(request)
-                    start = time.monotonic()
-                    with async_timeout.timeout(connection_lifetime):
-                        message, data, addr = await client.recv_packet()
-                        self.logger.debug('Got %s for %ss', message.__class__.__name__, time.monotonic() - start)
-                    self.resp_cache['a2s_info'] = data
-                    await asyncio.sleep(self.settings.a2s_info_cache_lifetime)
+                await client.send_packet(request)
 
-                logger.debug('Connection expired. Closing')
+                start = time.monotonic()
+                with async_timeout.timeout(
+                    timeout=max(
+                        self.settings.a2s_response_timeout,
+                        self.settings.a2s_info_cache_lifetime,
+                    )
+                ):
+                    message, data, addr = await client.recv_packet()
+                    self.logger.debug('Got %s for %ss', message.__class__.__name__, time.monotonic() - start)
+
+                self.resp_cache['a2s_info'] = data
+                await asyncio.sleep(self.settings.a2s_info_cache_lifetime)
 
     async def _update_rules(self):
         logger = self.logger.getChild('update-rules')
 
-        get_time = asyncio.get_event_loop().time
-        connection_lifetime = self.settings.src_query_port_lifetime
         while True:
-            connection_eta = get_time() + connection_lifetime
-
             async with (await connect(self.server_addr)) as client:
                 logger.debug('Connected to %s (client port=%s)', self.server_addr, client.sockname[1])
 
-                a2s_challenge = self.A2S_EMPTY_CHALLENGE
-                while get_time() < connection_eta:
-                    request = messages.RulesRequest(challenge=a2s_challenge)
-                    message, data, addr, a2s_challenge = await self.send_recv_packet(
-                        client,
-                        request,
-                        timeout=connection_lifetime,
-                    )
-                    self.resp_cache['a2s_rules'] = data
-                    await asyncio.sleep(self.settings.a2s_rules_cache_lifetime)
+                request = messages.RulesRequest(challenge=self.A2S_EMPTY_CHALLENGE)
 
-                logger.debug('Connection expired. Closing')
+                message, data, addr, a2s_challenge = await self.send_recv_packet(
+                    client,
+                    request,
+                    timeout=max(
+                        self.settings.a2s_response_timeout,
+                        self.settings.a2s_rules_cache_lifetime,
+                    ),
+                )
+
+                self.resp_cache['a2s_rules'] = data
+                await asyncio.sleep(self.settings.a2s_rules_cache_lifetime)
 
     async def _update_players(self):
         logger = self.logger.getChild('update-players')
 
-        get_time = asyncio.get_event_loop().time
-        connection_lifetime = self.settings.src_query_port_lifetime
         while True:
-            connection_eta = get_time() + connection_lifetime
-
             async with (await connect(self.server_addr)) as client:
                 logger.debug('Connected to %s (client port=%s)', self.server_addr, client.sockname[1])
 
-                a2s_challenge = self.A2S_EMPTY_CHALLENGE
-                while get_time() < connection_eta:
-                    request = messages.PlayersRequest(challenge=a2s_challenge)
-                    message, data, addr, a2s_challenge = await self.send_recv_packet(
-                        client,
-                        request,
-                        timeout=connection_lifetime,
-                    )
+                request = messages.PlayersRequest(challenge=self.A2S_EMPTY_CHALLENGE)
+                message, data, addr, a2s_challenge = await self.send_recv_packet(
+                    client,
+                    request,
+                    timeout=max(
+                        self.settings.a2s_response_timeout,
+                        self.settings.a2s_players_cache_lifetime,
+                    ),
+                )
 
-                    self.resp_cache['a2s_players'] = data
-                    await asyncio.sleep(self.settings.a2s_players_cache_lifetime)
-
-                logger.debug('Connection expired. Closing')
+                self.resp_cache['a2s_players'] = data
+                await asyncio.sleep(self.settings.a2s_players_cache_lifetime)
 
     def get_response_for(self, message, default) -> typing.Optional[bytes]:
         resp = default

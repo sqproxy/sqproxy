@@ -171,6 +171,10 @@ async def test_proxy_info(game_server_proxy, game_server_mock, a2s_info_cache_li
         assert isinstance(message, messages.InfoResponse)
         assert game_server_mock.info_response == game_server_proxy.resp_cache['a2s_info'] == data
 
+        if cache_misses:
+            # wait cache updated
+            await asyncio.sleep(CACHE_MISS_LIFETIME * 2)
+
     if cache_misses:
         assert game_server_mock.received_counter[messages.InfoRequest] > 1
     else:
@@ -200,6 +204,10 @@ async def test_proxy_rules(game_server_proxy, game_server_mock, a2s_rules_cache_
 
         assert isinstance(message, messages.RulesResponse)
         assert game_server_mock.rules_response == game_server_proxy.resp_cache['a2s_rules'] == data
+
+        if cache_misses:
+            # wait cache updated
+            await asyncio.sleep(CACHE_MISS_LIFETIME * 2)
 
     if cache_misses:
         assert game_server_mock.received_counter[messages.RulesRequest] > 2
@@ -231,6 +239,10 @@ async def test_proxy_players(game_server_proxy, game_server_mock, a2s_players_ca
 
         assert isinstance(message, messages.PlayersResponse)
         assert game_server_mock.players_response == game_server_proxy.resp_cache['a2s_players'] == data
+
+        if cache_misses:
+            # wait cache updated
+            await asyncio.sleep(CACHE_MISS_LIFETIME * 2)
 
     if cache_misses:
         assert game_server_mock.received_counter[messages.PlayersRequest] > 2

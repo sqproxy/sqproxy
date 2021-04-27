@@ -32,7 +32,6 @@ def conf_d_globals(config_manager, global_server_ip, global_bind_ip):
         'defaults': {
             '__global__': True,
             'a2s_info_cache_lifetime': 5,
-            'src_query_port_lifetime': 10,
         },
         'servers': {},
         'ebpf': {'enabled': False},

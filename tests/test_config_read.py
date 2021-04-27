@@ -62,7 +62,6 @@ def test_global_defaults_injected(config):
                 'bind_port': 27815,
             },
             'a2s_info_cache_lifetime': 5,
-            'src_query_port_lifetime': 10,
         },
         'DummyGame2': {
             'meta': ANY,
@@ -72,7 +71,6 @@ def test_global_defaults_injected(config):
                 'server_port': 27016,
             },
             'a2s_info_cache_lifetime': 5,
-            'src_query_port_lifetime': 10,
         },
     }
 

@@ -11,6 +11,7 @@ from pydantic import AnyHttpUrl
 from pydantic import BaseModel
 from pydantic import BaseSettings
 from pydantic import Extra
+from pydantic import confloat
 from pydantic import conint
 from pydantic import validator
 from sentry_sdk.integrations.logging import LoggingIntegration
@@ -111,10 +112,10 @@ class EntrypointModel(BaseModel):
 class ServerModel(BaseModel):
     meta: dict
     network: NetworkModel
-    a2s_info_cache_lifetime: int = 5
-    a2s_rules_cache_lifetime: int = 5
-    a2s_players_cache_lifetime: int = 1
-    src_query_port_lifetime: int = 10
+    a2s_info_cache_lifetime: confloat(gt=0) = 5
+    a2s_rules_cache_lifetime: confloat(gt=0) = 5
+    a2s_players_cache_lifetime: confloat(gt=0) = 1
+    a2s_response_timeout: confloat(gt=0) = 1
     no_a2s_rules: bool = False
     entrypoint: typing.Optional[EntrypointModel] = None
 
