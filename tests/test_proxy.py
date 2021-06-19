@@ -71,7 +71,10 @@ class GameServerMock:
         self.players_response = players_response
         self.rules_response = rules_response
 
-    async def run(self, server):
+        # Accept only A2S_INFO with challenge number
+        self.info_challenge_required = False
+
+    async def run(self, server):  # noqa: C901
         assert self.server is None
         self.server = server
 
@@ -80,7 +83,16 @@ class GameServerMock:
             self.received_counter[message.__class__] += 1
 
             if isinstance(message, messages.InfoRequest):
-                await server.send_bytes(self.info_response, addr=addr)
+                if not self.info_challenge_required:
+                    await server.send_bytes(self.info_response, addr=addr)
+                else:
+                    if message.get('challenge') != self.challenge:
+                        await server.send_packet(
+                            messages.GetChallengeResponse(challenge=self.challenge).encode(), addr=addr
+                        )
+                    else:
+                        await server.send_bytes(self.info_response, addr=addr)
+
             elif isinstance(message, messages.RulesRequest):
                 if message['challenge'] != self.challenge:
                     await server.send_packet(
@@ -153,7 +165,10 @@ async def game_server_proxy(
     ids=['cache hit', 'cache misses'],
     indirect=True,
 )
-async def test_proxy_info(game_server_proxy, game_server_mock, a2s_info_cache_lifetime):
+@pytest.mark.parametrize('info_challenge_required', [False, True], ids=['no-challenge', 'challenge'])
+async def test_proxy_info(game_server_proxy, game_server_mock, a2s_info_cache_lifetime, info_challenge_required):
+    game_server_mock.info_challenge_required = info_challenge_required
+
     assert game_server_proxy.resp_cache.get('a2s_info') is None
     assert game_server_mock.received_counter[messages.InfoRequest] == 0
 

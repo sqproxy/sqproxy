@@ -140,6 +140,7 @@ def decode_packet(packet, msg_classes):
 
 class SourceDatagramServer(SourceDatagramStream):
     request_message_classes = (
+        messages.InfoRequestV2,
         messages.InfoRequest,
         messages.PlayersRequest,
         messages.RulesRequest,

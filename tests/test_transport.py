@@ -39,9 +39,18 @@ def server_socket(udp_socket, server):
 
 @pytest.mark.parametrize('addr_family', ['INET', 'INET6'], indirect=True)
 async def test_source_server_recv_info(server_socket, server, addr_family):
+    assert messages.InfoRequest().encode() == messages.InfoRequestV2().encode()
     server_socket.send(messages.InfoRequest().encode())
     request, data, addr = await server.recv_packet()
     assert isinstance(request, messages.InfoRequest), request
+    assert addr == server_socket.getsockname()
+
+
+@pytest.mark.parametrize('addr_family', ['INET', 'INET6'], indirect=True)
+async def test_source_server_recv_info_with_challenge(server_socket, server, addr_family):
+    server_socket.send(messages.InfoRequestV2(challenge=0xBEEF).encode())
+    request, data, addr = await server.recv_packet()
+    assert isinstance(request, messages.InfoRequestV2), request
     assert addr == server_socket.getsockname()
 
 

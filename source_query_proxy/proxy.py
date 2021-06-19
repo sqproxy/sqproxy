@@ -140,13 +140,14 @@ class QueryProxy:
                 self.logger.debug('Got %s for %ss', message.__class__.__name__, time.monotonic() - start)
 
             if isinstance(message, messages.GetChallengeResponse):
-                if old_challenge is not self.A2S_EMPTY_CHALLENGE:
+                if old_challenge not in (self.A2S_EMPTY_CHALLENGE, None):
                     self.logger.warning(
                         'Challenge number changed: %s -> %s',
                         old_challenge,
                         message['challenge'],
                     )
 
+                old_challenge = a2s_challenge
                 a2s_challenge = message['challenge']
                 continue
 
@@ -156,23 +157,20 @@ class QueryProxy:
 
     async def _update_info(self):
         logger = self.logger.getChild('update-info')
-        request = messages.InfoRequest().encode()
+        request = messages.InfoRequestV2()
 
         while True:
             async with (await connect(self.server_addr)) as client:
                 logger.debug('Connected to %s (client port=%s)', self.server_addr, client.sockname[1])
 
-                await client.send_packet(request)
-
-                start = time.monotonic()
-                with async_timeout.timeout(
+                message, data, addr, a2s_challenge = await self.send_recv_packet(
+                    client,
+                    request,
                     timeout=max(
                         self.settings.a2s_response_timeout,
                         self.settings.a2s_info_cache_lifetime,
-                    )
-                ):
-                    message, data, addr = await client.recv_packet()
-                    self.logger.debug('Got %s for %ss', message.__class__.__name__, time.monotonic() - start)
+                    ),
+                )
 
                 self.resp_cache['a2s_info'] = data
                 await asyncio.sleep(self.settings.a2s_info_cache_lifetime)
