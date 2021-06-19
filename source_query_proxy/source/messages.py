@@ -22,6 +22,10 @@ class BufferExhaustedError(BrokenMessageError):
         BrokenMessageError.__init__(self, message)
 
 
+class SkipEncode(Exception):
+    pass
+
+
 def on_broken_default(func):
     @functools.wraps(func)
     def wrap(*args, **kw):
@@ -119,6 +123,7 @@ class MessageField(object):
         if self.optional:
             if self._value is not None:
                 return self._value
+            raise SkipEncode
         raise ValueError("Field '{fname}' is not optional".format(fname=self.name))
 
     def validate(self, value):
@@ -451,7 +456,10 @@ class Message(collections.abc.MutableMapping):
         values = dict(self.values, **field_values)
         buf = []
         for field in self.fields:
-            buf.append(field.encode(values.get(field.name, None), values))
+            try:
+                buf.append(field.encode(values.get(field.name, None), values))
+            except SkipEncode:
+                pass
         return b''.join(buf)
 
     @classmethod
@@ -499,6 +507,20 @@ class InfoRequest(Packet):
         ByteField('request_type', True, 0x54, validators=[lambda x: x == 0x54]),
         StringField('payload', True, 'Source Engine Query'),
     )
+
+
+class InfoRequestV2(InfoRequest):
+    """Protected with challenge version of InfoRequest (A2S_INFO)
+
+    Refs:
+     - https://github.com/sqproxy/sqproxy/issues/87
+     Official discussions:
+     - (part1) https://steamcommunity.com/discussions/forum/14/2989789048633291344/
+     - (part2) https://steamcommunity.com/discussions/forum/14/2974028351344359625/
+
+    """
+
+    fields = InfoRequest.fields + (LongFieldLE('challenge', optional=True),)
 
 
 class InfoResponse(Packet):
