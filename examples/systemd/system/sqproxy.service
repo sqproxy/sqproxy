@@ -1,5 +1,5 @@
 [Unit]
-Description=sqproxy - Offloading Source Engine query packets (A2S) handling
+Description=sqproxy - Offloading Source Engine query packets (A2S)
 After=network-online.target nss-lookup.target
 
 [Service]
