@@ -1,0 +1,15 @@
+[Unit]
+Description=sqproxy - Offloading Source Engine query packets (A2S) handling
+After=network-online.target nss-lookup.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/sqproxy run
+ExecReload=/usr/bin/kill -HUP $MAINPID
+ExecStop=/usr/bin/kill -TERM $MAINPID
+PrivateTmp=true
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
