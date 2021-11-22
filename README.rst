@@ -56,13 +56,24 @@ Run with eBPF
 
 Please read the instruction and install: https://github.com/sqproxy/sqredirect
 
-1. Enable eBPF in config (see examples/00-globals.yaml)
+1. Enable eBPF in config (see ``examples/00-globals.yaml``)
 
 2. Run
 
 .. code-block:: bash
 
     sqproxy run
+
+Run daemonized via systemd
+--------------------------
+
+1. Copy the systemd unit file ``examples/systemd/system/sqproxy.service`` to ``/etc/systemd/system/sqproxy.service`` (Optional: Adjust the ``ExecStart`` path if you have installed sqproxy into a different directory)
+
+2. Enable and start the service
+
+.. code-block:: bash
+
+    systemctl enable --now sqproxy.service
 
 
 Development
