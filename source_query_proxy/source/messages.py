@@ -22,7 +22,7 @@ class BufferExhaustedError(BrokenMessageError):
         BrokenMessageError.__init__(self, message)
 
 
-class SkipEncode(Exception):
+class SkipEncodeError(Exception):
     pass
 
 
@@ -123,7 +123,7 @@ class MessageField(object):
         if self.optional:
             if self._value is not None:
                 return self._value
-            raise SkipEncode
+            raise SkipEncodeError
         raise ValueError("Field '{fname}' is not optional".format(fname=self.name))
 
     def validate(self, value):
@@ -458,7 +458,7 @@ class Message(collections.abc.MutableMapping):
         for field in self.fields:
             try:
                 buf.append(field.encode(values.get(field.name, None), values))
-            except SkipEncode:
+            except SkipEncodeError:
                 pass
         return b''.join(buf)
 
