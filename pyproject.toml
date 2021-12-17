@@ -4,19 +4,19 @@ version = "2.1.0"
 description = "Async proxy for Source Engine Query Protocol"
 authors = ["spumer <spumer-tm@yandex.ru>"]
 license = "GPL-3.0"
-homepage = "https://github.com/spumer/source-query-proxy"
+homepage = "https://github.com/sqproxy/sqproxy"
 readme = 'README.rst'
 keywords = ['valve', 'source', 'engine', 'proxy', 'query', 'cache']
 
 [tool.poetry.dependencies]
 python = "^3.7"
-uvloop = "0.15.0"
+uvloop = "^0.16.0"
 pylru = "^1.2.0"
 pydantic = {extras = ["dotenv"], version = "^1.4"}
 pyyaml = "^5.2"
 pid = ">=2.2,<4.0"
 python-dotenv = ">=0.10.3,<0.15.0"
-asyncio_dgram = "^1.0"
+asyncio_dgram = "^2.1.0"
 backoff = "^1.10"
 async-timeout = "^3.0"
 click = "^7.0"
@@ -35,6 +35,8 @@ pytest-cov = "^2.10"
 pytest-deadfixtures = "^2.2.1"
 pytest-env = "^0.6.2"
 pytest-mock = "^3.5.1"
+mistune = "<2.0.0"  # dephell install fail without it
+dephell = "^0.8.3"
 
 [tool.poetry.scripts]
 sqproxy = "source_query_proxy.cli:sqproxy"
