@@ -47,19 +47,19 @@ precommit_install:  ## Установка pre-commit хука с проверк�
 
 bump_major:
 	$(BIN)bumpversion major
-	dephell convert deps
+	$(BIN)python3 update_setup.py
 	git add setup.py
 	git commit --amend --no-edit
 
 bump_minor:
 	$(BIN)bumpversion minor
-	dephell convert deps
+	$(BIN)python3 update_setup.py
 	git add setup.py
 	git commit --amend --no-edit
 
 bump_patch:
 	$(BIN)bumpversion patch
-	dephell convert deps
+	$(BIN)python3 update_setup.py
 	git add setup.py
 	git commit --amend --no-edit
 
