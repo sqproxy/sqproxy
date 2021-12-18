@@ -124,7 +124,7 @@ async def game_server_mock(
     task.add_done_callback(lambda fut: not fut.cancelled() and fut.result())
     yield game_server
     task.cancel()
-    await asyncio.gather(task, loop=event_loop, return_exceptions=True)
+    await asyncio.gather(task, return_exceptions=True)
 
 
 @pytest.fixture()
@@ -156,7 +156,7 @@ async def game_server_proxy(
     task.add_done_callback(lambda fut: not fut.cancelled() and fut.result())
     yield proxy
     task.cancel()
-    await asyncio.gather(task, loop=event_loop, return_exceptions=True)
+    await asyncio.gather(task, return_exceptions=True)
 
 
 @pytest.mark.parametrize(

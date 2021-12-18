@@ -196,7 +196,8 @@ async def bind(addr, *, cls: typing.Type[SourceDatagramServerType] = None) -> So
     drained = asyncio.Event()
 
     transport, protocol = await loop.create_datagram_endpoint(
-        lambda: Protocol(recvq, excq, drained), local_addr=addr, reuse_address=False
+        lambda: Protocol(recvq, excq, drained),
+        local_addr=addr,
     )
 
     if cls is None:

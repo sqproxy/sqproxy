@@ -237,8 +237,11 @@ class QueryProxy:
         return resp
 
     async def run(self):
+        tasks = [
+            asyncio.create_task(coro) for coro in (self.update_server_query_cache(), self.listen_client_requests())
+        ]
         done, pending = await asyncio.wait(
-            [self.update_server_query_cache(), self.listen_client_requests()],
+            tasks,
             return_when=asyncio.FIRST_COMPLETED,
         )
         for task in done:
