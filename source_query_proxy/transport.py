@@ -66,7 +66,7 @@ class SourceDatagramStream(DatagramStream):
 
     async def send_packet(self, packet, addr=None, split_size=FRAGMENT_MAX_SIZE):
         if len(packet) <= split_size:
-            await self.send(packet, addr)
+            await self._send(packet, addr)
             return
 
         message_id = random.randint(1, MAX_SIZE_32)
@@ -86,7 +86,7 @@ class SourceDatagramStream(DatagramStream):
                 split_header=True,
             )
 
-            await self.send(b''.join((fragment_header, fragment_tail)), addr)
+            await self._send(b''.join((fragment_header, fragment_tail)), addr)
 
     async def recv_packet(self):
         while True:
@@ -107,7 +107,7 @@ class SourceDatagramStream(DatagramStream):
         """Alias for `send()`, use it instead `send()`
         to explicit difference from `send_packet()`
         """
-        return await self.send(data, addr)
+        return await self._send(data, addr)
 
     async def recv_bytes(self):
         """Alias for `recv()`, use it instead `recv()`
