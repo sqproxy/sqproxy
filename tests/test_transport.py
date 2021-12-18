@@ -1,6 +1,8 @@
 import pytest
 
 from source_query_proxy.source import messages
+from source_query_proxy.transport import SourceDatagramClient
+from source_query_proxy.transport import SourceDatagramServer
 from source_query_proxy.transport import bind
 from source_query_proxy.transport import connect
 
@@ -8,7 +10,7 @@ pytestmark = [pytest.mark.asyncio]
 
 
 @pytest.fixture()
-async def server(addr_family):
+async def server(addr_family) -> SourceDatagramServer:
     addr, _ = addr_family
     server = await bind(addr)
     yield server
@@ -24,7 +26,7 @@ def client_socket(udp_socket, addr_family):
 
 
 @pytest.fixture()
-async def client(client_socket):
+async def client(client_socket) -> SourceDatagramClient:
     client = await connect(client_socket.getsockname()[:2])
     yield client
     client.close()
@@ -86,6 +88,6 @@ async def test_source_server_recv_fragmented_request(addr_family):
 
 @pytest.mark.parametrize('addr_family', ['INET', 'INET6'], indirect=True)
 async def test_source_client_send_request(client_socket, client, addr_family):
-    await client.send(b'hi')
+    await client.send_bytes(b'hi')
     got, client_addr = client_socket.recvfrom(4)
     assert got == b'hi'
