@@ -172,7 +172,7 @@ async def test_proxy_info(game_server_proxy, game_server_mock, a2s_info_cache_li
     assert game_server_proxy.resp_cache.get('a2s_info') is None
     assert game_server_mock.received_counter[messages.InfoRequest] == 0
 
-    await game_server_proxy.wait_ready()
+    await asyncio.wait_for(game_server_proxy.wait_ready(), timeout=1)
 
     client = await connect(('127.0.0.1', 27915))
 
@@ -206,7 +206,7 @@ async def test_proxy_rules(game_server_proxy, game_server_mock, a2s_rules_cache_
     assert game_server_proxy.resp_cache.get('a2s_rules') is None
     assert game_server_mock.received_counter[messages.RulesRequest] == 0
 
-    await game_server_proxy.wait_ready()
+    await asyncio.wait_for(game_server_proxy.wait_ready(), timeout=1)
 
     client = await connect(('127.0.0.1', 27915))
 
@@ -241,7 +241,7 @@ async def test_proxy_players(game_server_proxy, game_server_mock, a2s_players_ca
     assert game_server_proxy.resp_cache.get('a2s_players') is None
     assert game_server_mock.received_counter[messages.PlayersRequest] == 0
 
-    await game_server_proxy.wait_ready()
+    await asyncio.wait_for(game_server_proxy.wait_ready(), timeout=1)
 
     client = await connect(('127.0.0.1', 27915))
 
