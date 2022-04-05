@@ -52,6 +52,8 @@ defaults:
   no_a2s_rules: false
 
 
+# servers sections is required and can't be empty
+# it can be filled by other .yaml files
 # See 01-dummy-game.yaml
 servers:
 
