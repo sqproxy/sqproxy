@@ -35,7 +35,7 @@ pytest-cov = "^2.10"
 pytest-deadfixtures = "^2.2.1"
 pytest-env = "^0.6.2"
 pytest-mock = "^3.5.1"
-mistune = "<2.0.0"  # dephell install fail without it
+mistune = "<3.0.0"  # dephell install fail without it
 dephell = "^0.8.3"
 
 [tool.poetry.scripts]
