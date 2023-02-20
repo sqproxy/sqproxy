@@ -97,7 +97,7 @@ class QueryProxy:
                 if response is None:
                     self.logger.warning('No response for %s', request)
                     continue
-                elif response is NO_RESPONSE:
+                if response is NO_RESPONSE:
                     continue
 
                 await listening.send_packet(response, addr=addr)

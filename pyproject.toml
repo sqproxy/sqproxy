@@ -9,18 +9,18 @@ readme = 'README.rst'
 keywords = ['valve', 'source', 'engine', 'proxy', 'query', 'cache']
 
 [tool.poetry.dependencies]
-python = "^3.7"
+python = "^3.8"
 uvloop = "^0.16.0"
 pylru = "^1.2.0"
 pydantic = {extras = ["dotenv"], version = "^1.4"}
-pyyaml = "^5.2"
+pyyaml = "^6.0"
 pid = ">=2.2,<4.0"
 python-dotenv = ">=0.10.3,<0.15.0"
 asyncio_dgram = "^2.1.0"
 backoff = "^1.10"
 async-timeout = "^3.0"
 click = "^7.0"
-pyroute2 = "^0.5.10"
+pyroute2 = "^0.7.5"
 sentry-sdk = ">=0.14.3,<0.20.0"
 cached-property = "^1.5.2"
 
@@ -35,12 +35,13 @@ pytest-cov = "^2.10"
 pytest-deadfixtures = "^2.2.1"
 pytest-env = "^0.6.2"
 pytest-mock = "^3.5.1"
-mistune = "<2.0.0"  # dephell install fail without it
-dephell = "^0.8.3"
 
 [tool.poetry.scripts]
 sqproxy = "source_query_proxy.cli:sqproxy"
 
+
+[tool.poetry.group.dev.dependencies]
+cruft = "^2.12.0"
 
 [tool.dephell.main]
 from = {format = "poetry", path = "pyproject.toml"}

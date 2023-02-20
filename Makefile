@@ -32,12 +32,12 @@ test:   ## Запуск тестов
 
 lint:  ## Проверка кода (linting)
 	$(BIN)flake8 --jobs 4 --statistics --show-source $(CODE) tests
-	$(BIN)black --target-version=py37 --skip-string-normalization --line-length=120 --check $(CODE) tests
+	$(BIN)black --target-version=py38 --skip-string-normalization --line-length=120 --check $(CODE) tests
 	#$(BIN)python -m pytest --dead-fixtures --dup-fixtures  # disabled due _old_style_conf_d_globals detected as unused
 
 pretty:  ## Автоформатирование согласно code-style
 	$(BIN)isort $(CODE) tests
-	$(BIN)black --target-version=py37 --skip-string-normalization --line-length=120 $(CODE) tests
+	$(BIN)black --target-version=py38 --skip-string-normalization --line-length=120 $(CODE) tests
 	$(BIN)unify --in-place --recursive $(CODE) tests
 
 precommit_install:  ## Установка pre-commit хука с проверками code-style и мелкими авто-справлениеями
