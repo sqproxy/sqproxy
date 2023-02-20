@@ -45,24 +45,20 @@ precommit_install:  ## Установка pre-commit хука с проверк�
 	echo "exec make lint test BIN=$(BIN)" >> .git/hooks/pre-commit
 	chmod +x .git/hooks/pre-commit
 
+# https://commitizen-tools.github.io/commitizen/exit_codes/
+# no-raise:
+#  3 - No commit found (allow force version bump)
 bump_major:
-	$(BIN)bumpversion major
-	$(BIN)python3 update_setup.py
-	git add setup.py
-	git commit --amend --no-edit
+	$(BIN)cz --no-raise 3 bump --increment MAJOR --changelog
 
 bump_minor:
-	$(BIN)bumpversion minor
-	$(BIN)python3 update_setup.py
-	git add setup.py
-	git commit --amend --no-edit
+	$(BIN)cz --no-raise 3 bump --increment MINOR --changelog
 
 bump_patch:
-	$(BIN)bumpversion patch
-	$(BIN)python3 update_setup.py
-	git add setup.py
-	git commit --amend --no-edit
+	$(BIN)cz --no-raise 3 bump --increment PATCH --changelog
 
+bump:
+	$(BIN)cz --no-raise 3 bump --changelog
 
 publish:
 	git push origin master --tags
