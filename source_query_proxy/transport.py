@@ -7,13 +7,24 @@ import typing
 
 import pylru
 from asyncio_dgram.aio import DatagramStream
-from asyncio_dgram.aio import Protocol
+from asyncio_dgram.aio import Protocol as _AioDgramProtocol
 
 from .source import messages
 
 MAX_SIZE_32 = 2 ** 31 - 1
 
 logger = logging.getLogger('sqproxy.transport')
+
+
+class ErrorIgnoreProtocol(_AioDgramProtocol):
+    def error_received(self, exc: Exception) -> None:
+        """
+        Called when a previous send or receive operation raises an OSError. exc is the OSError instance.
+        This method is called in rare conditions,
+         when the transport (e.g. UDP) detects that a datagram could not be delivered to its recipient.
+        In many conditions though, undeliverable datagrams will be silently dropped.
+        """
+        pass  # we are not interested in any errors because it's udp
 
 
 class BrokenPacketError(Exception):  # FIXME: message is app layer and packet is transport layer
@@ -196,7 +207,7 @@ async def bind(addr, *, cls: typing.Type[SourceDatagramServerType] = None) -> So
     drained = asyncio.Event()
 
     transport, protocol = await loop.create_datagram_endpoint(
-        lambda: Protocol(recvq, excq, drained),
+        lambda: ErrorIgnoreProtocol(recvq, excq, drained),
         local_addr=addr,
     )
 
@@ -224,7 +235,10 @@ async def connect(addr, *, cls: typing.Type[SourceDatagramClientType] = None) ->
     excq = asyncio.Queue()
     drained = asyncio.Event()
 
-    transport, protocol = await loop.create_datagram_endpoint(lambda: Protocol(recvq, excq, drained), remote_addr=addr)
+    transport, protocol = await loop.create_datagram_endpoint(
+        lambda: ErrorIgnoreProtocol(recvq, excq, drained),
+        remote_addr=addr,
+    )
 
     if cls is None:
         cls = SourceDatagramClient
