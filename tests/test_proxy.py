@@ -1,5 +1,7 @@
 import asyncio
 import collections
+import contextlib
+import typing
 
 import async_timeout
 import pytest
@@ -78,8 +80,9 @@ class GameServerMock:
 
         # Accept only A2S_INFO with challenge number
         self.info_challenge_required = False
+        self._running_task = None
 
-    async def run(self, server):  # noqa: C901
+    async def _run(self, server) -> typing.NoReturn:  # noqa: C901
         assert self.server is None
         self.server = server
 
@@ -115,6 +118,23 @@ class GameServerMock:
             else:
                 raise NotImplementedError
 
+    @contextlib.asynccontextmanager
+    async def run(self, server):
+        assert self._running_task is None, 'Server already running'
+        task = asyncio.get_running_loop().create_task(self._run(server))
+        task.add_done_callback(lambda fut: not fut.cancelled() and fut.result())
+        self._running_task = task
+        try:
+            yield self._running_task
+        finally:
+            if not task.done():
+                task.cancel()
+
+    async def shutdown(self):
+        assert self.server is not None
+        self._running_task.cancel()
+        self._running_task = None
+
 
 @pytest.fixture()
 async def game_server_mock(
@@ -125,10 +145,8 @@ async def game_server_mock(
     rust_players_response_bytes,
 ):
     game_server = GameServerMock(rust_info_response_bytes, rust_players_response_bytes, rust_rules_response_bytes)
-    task = event_loop.create_task(game_server.run(server))
-    task.add_done_callback(lambda fut: not fut.cancelled() and fut.result())
-    yield game_server
-    task.cancel()
+    async with game_server.run(server) as task:
+        yield game_server
     await asyncio.gather(task, return_exceptions=True)
 
 
@@ -292,3 +310,10 @@ async def test_proxy_players(game_server_proxy, game_server_mock, a2s_players_ca
     else:
         # Challenge request + Real request
         assert game_server_mock.received_counter[messages.PlayersRequest] == 2
+
+
+async def test_proxy_wait_ready_graceful_period(game_server_proxy, game_server_mock, caplog):
+    await game_server_mock.shutdown()
+    game_server_proxy.resp_cache.clear()
+    await asyncio.wait_for(game_server_proxy.wait_ready(graceful_period=0.1), 1)
+    assert not game_server_proxy.resp_cache

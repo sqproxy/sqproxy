@@ -43,6 +43,8 @@ def event_loop():
     uvloop.install()
 
     loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
     yield loop
     # Right way to close event_loop
     # copied from asyncio.run
