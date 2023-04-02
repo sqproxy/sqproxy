@@ -1,3 +1,10 @@
+## v2.2.0 (2023-04-02)
+
+### Feat
+
+- make i/o more stable
+- support new uvloop + python 3.11
+
 ## v2.1.2 (2023-02-20)
 
 ### Fix

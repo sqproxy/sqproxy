@@ -1,0 +1,13 @@
+FROM docker/for-desktop-kernel:5.15.49-13422a825f833d125942948cf8a8688cef721ead AS ksrc
+
+FROM ubuntu:lunar
+
+WORKDIR /
+COPY --from=ksrc /kernel-dev.tar /
+RUN tar xf kernel-dev.tar && rm kernel-dev.tar
+
+RUN apt-get update && apt install -y kmod python3-bpfcc
+RUN apt install -y --no-install-recommends python3-pyroute2
+
+WORKDIR /root
+CMD mount -t debugfs debugfs /sys/kernel/debug && /bin/bash
