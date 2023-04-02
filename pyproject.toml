@@ -9,7 +9,7 @@ readme = 'README.rst'
 keywords = ['valve', 'source', 'engine', 'proxy', 'query', 'cache']
 
 [tool.poetry.dependencies]
-python = "^3.8"
+python = "^3.7"
 uvloop = ">=0.16.0"
 pylru = "^1.2.0"
 pydantic = {extras = ["dotenv"], version = "^1.4"}
