@@ -18,6 +18,12 @@ MAX_SIZE_32 = 2 ** 31 - 1
 
 NO_RESPONSE = object()
 
+retry_ConnError = backoff.on_exception(  # noqa: ignore=N816
+    backoff.constant,
+    ConnectionRefusedError,
+    logger=None,
+)
+
 
 class AwaitableDict(collections.UserDict):
     """Оборачивает все значения в asyncio.Future
@@ -73,7 +79,14 @@ class QueryProxy:
     # noinspection PyPep8Naming
     @property
     def retry_AnyError(self, log_level=logging.ERROR):  # noqa: ignore=N802
-        return backoff.on_exception(backoff.constant, Exception, logger=self.logger, backoff_log_level=log_level)
+        return backoff.on_exception(
+            backoff.constant,
+            Exception,
+            logger=self.logger,
+            backoff_log_level=log_level,
+            giveup=lambda e: isinstance(e, asyncio.CancelledError),
+            giveup_log_level=logging.DEBUG,
+        )
 
     async def _listen_client_requests(self):
         self.logger.info('Binding (%s) ... ', self.listen_addr)
@@ -156,9 +169,7 @@ class QueryProxy:
 
         return message, data, addr, a2s_challenge
 
-    @backoff.on_exception(
-        backoff.constant, (asyncio.TimeoutError, ConnectionRefusedError), logger=None, backoff_log_level=logging.DEBUG
-    )
+    @retry_ConnError
     async def _update_info(self):
         logger = self.logger.getChild('update-info')
         request = messages.InfoRequestV2()
@@ -167,22 +178,23 @@ class QueryProxy:
             async with (await connect(self.server_addr)) as client:
                 logger.debug('Send request to %s (client port=%s)', self.server_addr, client.sockname[1])
 
-                message, data, addr, a2s_challenge = await self.send_recv_packet(
-                    client,
-                    request,
-                    timeout=max(
-                        self.settings.a2s_response_timeout,
-                        self.settings.a2s_info_cache_lifetime,
-                    ),
-                )
-
-                self.resp_cache['a2s_info'] = data
+                try:
+                    message, data, addr, a2s_challenge = await self.send_recv_packet(
+                        client,
+                        request,
+                        timeout=max(
+                            self.settings.a2s_response_timeout,
+                            self.settings.a2s_info_cache_lifetime,
+                        ),
+                    )
+                except asyncio.TimeoutError:
+                    pass
+                else:
+                    self.resp_cache['a2s_info'] = data
 
             await asyncio.sleep(self.settings.a2s_info_cache_lifetime)
 
-    @backoff.on_exception(
-        backoff.constant, (asyncio.TimeoutError, ConnectionRefusedError), logger=None, backoff_log_level=logging.DEBUG
-    )
+    @retry_ConnError
     async def _update_rules(self):
         logger = self.logger.getChild('update-rules')
 
@@ -192,22 +204,23 @@ class QueryProxy:
 
                 request = messages.RulesRequest(challenge=self.A2S_EMPTY_CHALLENGE)
 
-                message, data, addr, a2s_challenge = await self.send_recv_packet(
-                    client,
-                    request,
-                    timeout=max(
-                        self.settings.a2s_response_timeout,
-                        self.settings.a2s_rules_cache_lifetime,
-                    ),
-                )
-
-                self.resp_cache['a2s_rules'] = data
+                try:
+                    message, data, addr, a2s_challenge = await self.send_recv_packet(
+                        client,
+                        request,
+                        timeout=max(
+                            self.settings.a2s_response_timeout,
+                            self.settings.a2s_rules_cache_lifetime,
+                        ),
+                    )
+                except asyncio.TimeoutError:
+                    pass
+                else:
+                    self.resp_cache['a2s_rules'] = data
 
             await asyncio.sleep(self.settings.a2s_rules_cache_lifetime)
 
-    @backoff.on_exception(
-        backoff.constant, (asyncio.TimeoutError, ConnectionRefusedError), logger=None, backoff_log_level=logging.DEBUG
-    )
+    @retry_ConnError
     async def _update_players(self):
         logger = self.logger.getChild('update-players')
 
@@ -216,16 +229,19 @@ class QueryProxy:
                 logger.debug('Send request to %s (client port=%s)', self.server_addr, client.sockname[1])
 
                 request = messages.PlayersRequest(challenge=self.A2S_EMPTY_CHALLENGE)
-                message, data, addr, a2s_challenge = await self.send_recv_packet(
-                    client,
-                    request,
-                    timeout=max(
-                        self.settings.a2s_response_timeout,
-                        self.settings.a2s_players_cache_lifetime,
-                    ),
-                )
-
-                self.resp_cache['a2s_players'] = data
+                try:
+                    message, data, addr, a2s_challenge = await self.send_recv_packet(
+                        client,
+                        request,
+                        timeout=max(
+                            self.settings.a2s_response_timeout,
+                            self.settings.a2s_players_cache_lifetime,
+                        ),
+                    )
+                except asyncio.TimeoutError:
+                    pass
+                else:
+                    self.resp_cache['a2s_players'] = data
 
             await asyncio.sleep(self.settings.a2s_players_cache_lifetime)
 
