@@ -1,3 +1,10 @@
+## v2.3.0 (2023-04-03)
+
+### Feat
+
+- **a2s**: support Compressed Fragment
+- do not spam TimeoutError to logs when it's normal
+
 ## v2.2.1 (2023-04-02)
 
 ### Fix
