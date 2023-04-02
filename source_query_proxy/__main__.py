@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import sys
 from contextlib import suppress
 
 import uvloop
@@ -14,9 +15,17 @@ logger = logging.getLogger('sqproxy')
 
 @pidfile('sqproxy', piddir=config.settings.piddir)
 def run():
-    uvloop.install()
+    if sys.version_info >= (3, 11):
+        with asyncio.Runner(loop_factory=uvloop.new_event_loop) as runner:
+            runner.run(main())
+    else:
+        uvloop.install()
+        asyncio.run(main())
+
+
+async def main():
     with suppress(KeyboardInterrupt, SystemExit):
-        asyncio.run(_run_servers())
+        await _run_servers()
 
 
 async def _run_servers():
