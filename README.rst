@@ -33,7 +33,7 @@ Installing
 
 .. code-block:: bash
 
-    pip install source-query-proxy==2.2.0
+    pip install source-query-proxy==2.2.1
 
 Configuring
 -----------

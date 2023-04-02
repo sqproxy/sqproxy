@@ -1,3 +1,9 @@
+## v2.2.1 (2023-04-02)
+
+### Fix
+
+- downgrade min python to 3.7
+
 ## v2.2.0 (2023-04-02)
 
 ### Feat
