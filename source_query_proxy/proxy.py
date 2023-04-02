@@ -72,19 +72,19 @@ class QueryProxy:
 
     # noinspection PyPep8Naming
     @property
-    def retry_TimeoutError(self):  # noqa: ignore=N802
-        return backoff.on_exception(backoff.constant, asyncio.TimeoutError, logger=self.logger)
+    def retry_AnyError(self, log_level=logging.ERROR):  # noqa: ignore=N802
+        return backoff.on_exception(backoff.constant, Exception, logger=self.logger, backoff_log_level=log_level)
 
-    async def listen_client_requests(self):
-        self.logger.info('Binding ... ')
+    async def _listen_client_requests(self):
+        self.logger.info('Binding (%s) ... ', self.listen_addr)
         async with (await self.bind(self.listen_addr)) as listening:
-            self.logger.info('Binding ... done!')
-            self.logger.info('Listen for client requests ...')
+            self.logger.info('Binding (%s) ... done!', self.listen_addr)
+            self.logger.info('Listen for client requests on %s ...', self.listen_addr)
             while True:
                 request, data, addr = await listening.recv_packet()
                 if request is None:
                     self.logger.warning(
-                        'Broken data was received: data[:150]=%s',
+                        'Packet ignored. Broken data was received: data[:150]=%s',
                         data[:150],
                     )
                     continue
@@ -102,15 +102,16 @@ class QueryProxy:
 
                 await listening.send_packet(response, addr=addr)
 
-    async def update_server_query_cache(self):
-        coros = [
-            self.retry_TimeoutError(self._update_info)(),
-            self.retry_TimeoutError(self._update_players)(),
+    def get_tasks(self):
+        funcs = [
+            self._listen_client_requests,
+            self._update_info,
+            self._update_players,
         ]
         if not self.settings.no_a2s_rules:
-            coros.append(self.retry_TimeoutError(self._update_rules)())
+            funcs.append(self._update_rules)
 
-        return await asyncio.gather(*coros)
+        return [asyncio.create_task(self.retry_AnyError(func)()) for func in funcs]
 
     async def send_recv_packet(self, client, packet: messages.Packet, timeout=None):
         """Send packet and wait for response for it
@@ -155,13 +156,16 @@ class QueryProxy:
 
         return message, data, addr, a2s_challenge
 
+    @backoff.on_exception(
+        backoff.constant, (asyncio.TimeoutError, ConnectionRefusedError), logger=None, backoff_log_level=logging.DEBUG
+    )
     async def _update_info(self):
         logger = self.logger.getChild('update-info')
         request = messages.InfoRequestV2()
 
         while True:
             async with (await connect(self.server_addr)) as client:
-                logger.debug('Connected to %s (client port=%s)', self.server_addr, client.sockname[1])
+                logger.debug('Send request to %s (client port=%s)', self.server_addr, client.sockname[1])
 
                 message, data, addr, a2s_challenge = await self.send_recv_packet(
                     client,
@@ -173,14 +177,18 @@ class QueryProxy:
                 )
 
                 self.resp_cache['a2s_info'] = data
-                await asyncio.sleep(self.settings.a2s_info_cache_lifetime)
 
+            await asyncio.sleep(self.settings.a2s_info_cache_lifetime)
+
+    @backoff.on_exception(
+        backoff.constant, (asyncio.TimeoutError, ConnectionRefusedError), logger=None, backoff_log_level=logging.DEBUG
+    )
     async def _update_rules(self):
         logger = self.logger.getChild('update-rules')
 
         while True:
             async with (await connect(self.server_addr)) as client:
-                logger.debug('Connected to %s (client port=%s)', self.server_addr, client.sockname[1])
+                logger.debug('Sent request to %s (client port=%s)', self.server_addr, client.sockname[1])
 
                 request = messages.RulesRequest(challenge=self.A2S_EMPTY_CHALLENGE)
 
@@ -194,14 +202,18 @@ class QueryProxy:
                 )
 
                 self.resp_cache['a2s_rules'] = data
-                await asyncio.sleep(self.settings.a2s_rules_cache_lifetime)
 
+            await asyncio.sleep(self.settings.a2s_rules_cache_lifetime)
+
+    @backoff.on_exception(
+        backoff.constant, (asyncio.TimeoutError, ConnectionRefusedError), logger=None, backoff_log_level=logging.DEBUG
+    )
     async def _update_players(self):
         logger = self.logger.getChild('update-players')
 
         while True:
             async with (await connect(self.server_addr)) as client:
-                logger.debug('Connected to %s (client port=%s)', self.server_addr, client.sockname[1])
+                logger.debug('Send request to %s (client port=%s)', self.server_addr, client.sockname[1])
 
                 request = messages.PlayersRequest(challenge=self.A2S_EMPTY_CHALLENGE)
                 message, data, addr, a2s_challenge = await self.send_recv_packet(
@@ -214,7 +226,8 @@ class QueryProxy:
                 )
 
                 self.resp_cache['a2s_players'] = data
-                await asyncio.sleep(self.settings.a2s_players_cache_lifetime)
+
+            await asyncio.sleep(self.settings.a2s_players_cache_lifetime)
 
     def get_response_for(self, message, default) -> typing.Optional[bytes]:
         resp = default
@@ -237,9 +250,7 @@ class QueryProxy:
         return resp
 
     async def run(self):
-        tasks = [
-            asyncio.create_task(coro) for coro in (self.update_server_query_cache(), self.listen_client_requests())
-        ]
+        tasks = self.get_tasks()
         done, pending = await asyncio.wait(
             tasks,
             return_when=asyncio.FIRST_COMPLETED,
