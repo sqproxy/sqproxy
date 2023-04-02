@@ -47,6 +47,9 @@ class SourceDatagramStream(DatagramStream):
             return packet
 
         fragment = messages.Fragment.decode(header.raw_tail)
+        if fragment.is_compressed:
+            fragment = messages.CompressedFragment.decode(header.raw_tail)
+
         packet_id = fragment['message_id']
 
         if packet_id in self.fragments:
@@ -73,7 +76,7 @@ class SourceDatagramStream(DatagramStream):
 
         self.fragments.pop(packet_id, None)
         packet_fragments.sort(key=lambda f: f['fragment_id'])
-        return b''.join(f.raw_tail for f in packet_fragments)
+        return b''.join(f.content for f in packet_fragments)
 
     async def send_packet(self, packet, addr=None, split_size=FRAGMENT_MAX_SIZE):
         if len(packet) <= split_size:

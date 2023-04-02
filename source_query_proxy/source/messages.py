@@ -1,5 +1,5 @@
 # Copyright (C) 2013 Oliver Ainsworth
-
+import bz2
 import collections
 import functools
 import socket
@@ -495,10 +495,31 @@ class Fragment(Packet):
     @property
     def is_compressed(self):
         # check MSB (Most Significant Bit)
-        return bool(self['message_id'] & (1 << 16))
+        # shift to 31 because we have LongField (4 bytes)
+        return bool(self['message_id'] & (1 << 31))
+
+    @property
+    def content(self):
+        return self.raw_tail
 
 
-# TODO: FragmentCompressionData
+class CompressedFragment(Packet):
+
+    fields = (
+        LongFieldLE('message_id'),
+        ByteField('fragment_count'),
+        ByteField('fragment_id'),  # 0-indexed
+        LongFieldLE('size'),
+        LongFieldLE('crc'),
+    )
+
+    @property
+    def is_compressed(self):
+        return True
+
+    @property
+    def content(self):
+        return bz2.decompress(self.raw_tail)
 
 
 class InfoRequest(Packet):
