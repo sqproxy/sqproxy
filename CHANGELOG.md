@@ -1,3 +1,9 @@
+## v2.4.0 (2023-04-03)
+
+### Feat
+
+- do not wait ready game server too long, force it's ready after 5 seconds
+
 ## v2.3.0 (2023-04-03)
 
 ### Feat
