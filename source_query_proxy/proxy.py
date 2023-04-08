@@ -41,6 +41,14 @@ class AwaitableDict(collections.UserDict):
             fut.set_result(value)
             self.data[key] = fut
 
+    def __iter__(self):
+        return iter(
+            k
+            for k, v in self.data.items()
+            # we need only ready values to get
+            if not isinstance(v, asyncio.Future) or (v.done() and not v.cancelled())
+        )
+
     def __getitem__(self, key):
         value = super().__getitem__(key)
         if not value.done() or value.cancelled():
@@ -278,7 +286,7 @@ class QueryProxy:
         for task in pending:
             task.cancel()
 
-    async def wait_ready(self, graceful_period: float = 5):
+    async def wait_ready(self):
         """Wait until all internals being ready to start"""
         resp_cache = self.resp_cache = AwaitableDict(self.resp_cache)
 
@@ -289,11 +297,12 @@ class QueryProxy:
         if not self.settings.no_a2s_rules:
             coros.append(resp_cache.get_wait('a2s_rules'))
 
+        graceful_period = self.settings.wait_ready_graceful_period
+
         try:
             with async_timeout.timeout(graceful_period):
                 await asyncio.gather(*coros)
         except asyncio.TimeoutError:
             self.logger.warning('Graceful period for wait ready exceeded. Skip waiting')
-            resp_cache = {}
-
-        self.resp_cache = dict(resp_cache)
+        finally:
+            self.resp_cache = dict(resp_cache)

@@ -117,6 +117,7 @@ class ServerModel(BaseModel):
     a2s_players_cache_lifetime: confloat(gt=0) = 1
     a2s_response_timeout: confloat(gt=0) = 1
     no_a2s_rules: bool = False
+    wait_ready_graceful_period: confloat(gt=0) = 5
     entrypoint: typing.Optional[EntrypointModel] = None
 
     @validator('entrypoint', pre=True)

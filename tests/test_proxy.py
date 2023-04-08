@@ -315,5 +315,12 @@ async def test_proxy_players(game_server_proxy, game_server_mock, a2s_players_ca
 async def test_proxy_wait_ready_graceful_period(game_server_proxy, game_server_mock, caplog):
     await game_server_mock.shutdown()
     game_server_proxy.resp_cache.clear()
-    await asyncio.wait_for(game_server_proxy.wait_ready(graceful_period=0.1), 1)
+
+    game_server_proxy.settings.wait_ready_graceful_period = 0.1
+    await asyncio.wait_for(game_server_proxy.wait_ready(), 1)
+
+    game_server_proxy.settings.wait_ready_graceful_period = 5
+    with pytest.raises(asyncio.TimeoutError):
+        await asyncio.wait_for(game_server_proxy.wait_ready(), 0.1)
+
     assert not game_server_proxy.resp_cache

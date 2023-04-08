@@ -51,6 +51,10 @@ defaults:
   # CS:GO also has broken A2S_RULES, but fix available at https://forums.alliedmods.net/showthread.php?t=236521
   no_a2s_rules: false
 
+  # How long wait (in seconds) responses from servers to mark it's ready for redirection
+  # It's useful for soft startup, but if server under attack you do not get response
+  # Default value - 5 seconds - should be enough for soft startup and ignore no-response and start redirection
+  wait_ready_graceful_period: 5
 
 # servers sections is required and can't be empty
 # it can be filled by other .yaml files
