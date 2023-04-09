@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "source-query-proxy"
-version = "2.4.0"
+version = "2.5.0"
 description = "Async proxy for Source Engine Query Protocol"
 authors = ["spumer <spumer-tm@yandex.ru>"]
 license = "GPL-3.0"
@@ -43,7 +43,7 @@ sqproxy = "source_query_proxy.cli:sqproxy"
 [tool.commitizen]  # https://commitizen-tools.github.io/commitizen/config/
 bump_message = "bump(release): v$current_version → v$new_version"
 tag_format = "v$version"
-version = "2.4.0"
+version = "2.5.0"
 version_files = [
     "pyproject.toml:version",
     "source_query_proxy/__init__.py",

@@ -1,3 +1,15 @@
+## v2.5.0 (2023-04-09)
+
+### Feat
+
+- now sqproxy will stop answer to requests if gameserver goes offline (after 10 failed requests by default)
+  - New option `max_a2s_fails_before_offline` allow control how many requests should fail 
+- **config**: add option `wait_ready_graceful_period`
+
+### Fix
+
+- CTRL+C not print KeyboardInterrupt exception (regression fix)
+
 ## v2.4.0 (2023-04-03)
 
 ### Feat
