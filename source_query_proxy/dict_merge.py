@@ -8,7 +8,7 @@ def dict_merge(base_dct, merge_dct):
     Recursive dict merge.
     Args:
         base_dct (dict) onto which the merge is executed
-        merge_dct (dict): base_dct merged into base_dct
+        merge_dct (dict): merge_dct merged into base_dct
         add_keys (bool): whether to add new keys
     Returns:
         dict: updated dict

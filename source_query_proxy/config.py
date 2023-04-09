@@ -118,6 +118,7 @@ class ServerModel(BaseModel):
     a2s_response_timeout: confloat(gt=0) = 1
     no_a2s_rules: bool = False
     wait_ready_graceful_period: confloat(gt=0) = 5
+    max_a2s_fails_before_offline: conint(gt=0) = 10
     entrypoint: typing.Optional[EntrypointModel] = None
 
     @validator('entrypoint', pre=True)

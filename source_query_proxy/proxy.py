@@ -65,6 +65,42 @@ class AwaitableDict(collections.UserDict):
         return await fut
 
 
+class LastOkFailCounter:
+    def __init__(
+        self,
+        fails_threshold: int,
+        on_fails_threshold_reached: typing.Callable,
+        on_fails_threshold_reset: typing.Callable,
+    ):
+        self._last_success_at = 0
+        self._fails_in_row = 0
+        self._fails_threshold_reached = True  # to run `on_fails_threshold_reset` on first `ok()` call
+        self.fails_threshold = fails_threshold
+        self.on_fails_threshold_reached = on_fails_threshold_reached
+        self.on_fails_threshold_reset = on_fails_threshold_reset
+
+    def ok(self):
+        now = time.monotonic()
+        if now < self._last_success_at:
+            return
+
+        self._last_success_at = now
+        self._fails_in_row = 0
+        if self._fails_threshold_reached:
+            self._fails_threshold_reached = False
+            self.on_fails_threshold_reset()
+
+    def fail(self):
+        now = time.monotonic()
+        if now < self._last_success_at:
+            return
+
+        self._fails_in_row += 1
+        if self._fails_in_row == self.fails_threshold:
+            self._fails_threshold_reached = True
+            self.on_fails_threshold_reached()
+
+
 class QueryProxy:
     A2S_EMPTY_CHALLENGE = -1
     connect = functools.partial(connect)
@@ -83,6 +119,20 @@ class QueryProxy:
         self.our_a2s_challenge = random.randint(1, MAX_SIZE_32)
         self.settings = settings
         self.logger = logging.getLogger(name)
+        self._okfail = LastOkFailCounter(
+            fails_threshold=self.settings.max_a2s_fails_before_offline,
+            on_fails_threshold_reached=self._on_offline,
+            on_fails_threshold_reset=self._on_online,
+        )
+        self.online = False  # True - answer to client requests, False - ignore it
+
+    def _on_online(self):
+        self.logger.info('Server UP now')
+        self.online = True
+
+    def _on_offline(self):
+        self.logger.warning('Server DOWN. Checking continued...')
+        self.online = False
 
     # noinspection PyPep8Naming
     @property
@@ -112,6 +162,9 @@ class QueryProxy:
 
                 if addr[1] == 0:
                     # FIXME: https://github.com/MagicStack/uvloop/issues/338
+                    continue
+
+                if not self.online:
                     continue
 
                 response = self.get_response_for(request, None)
@@ -196,8 +249,9 @@ class QueryProxy:
                         ),
                     )
                 except asyncio.TimeoutError:
-                    pass
+                    self._okfail.fail()
                 else:
+                    self._okfail.ok()
                     self.resp_cache['a2s_info'] = data
 
             await asyncio.sleep(self.settings.a2s_info_cache_lifetime)
@@ -222,8 +276,9 @@ class QueryProxy:
                         ),
                     )
                 except asyncio.TimeoutError:
-                    pass
+                    self._okfail.fail()
                 else:
+                    self._okfail.ok()
                     self.resp_cache['a2s_rules'] = data
 
             await asyncio.sleep(self.settings.a2s_rules_cache_lifetime)
@@ -247,8 +302,9 @@ class QueryProxy:
                         ),
                     )
                 except asyncio.TimeoutError:
-                    pass
+                    self._okfail.fail()
                 else:
+                    self._okfail.ok()
                     self.resp_cache['a2s_players'] = data
 
             await asyncio.sleep(self.settings.a2s_players_cache_lifetime)

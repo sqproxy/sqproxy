@@ -7,6 +7,7 @@ import async_timeout
 import pytest
 
 from source_query_proxy.config import ServerModel
+from source_query_proxy.dict_merge import dict_merge
 from source_query_proxy.proxy import QueryProxy
 from source_query_proxy.source import messages
 from source_query_proxy.transport import bind
@@ -124,6 +125,8 @@ class GameServerMock:
         task = asyncio.get_running_loop().create_task(self._run(server))
         task.add_done_callback(lambda fut: not fut.cancelled() and fut.result())
         self._running_task = task
+
+        await asyncio.sleep(0)
         try:
             yield self._running_task
         finally:
@@ -134,10 +137,12 @@ class GameServerMock:
         assert self.server is not None
         self._running_task.cancel()
         self._running_task = None
+        await asyncio.sleep(0)
 
 
 @pytest.fixture()
 async def game_server_mock(
+    request,
     event_loop,
     server,
     rust_info_response_bytes,
@@ -145,34 +150,57 @@ async def game_server_mock(
     rust_players_response_bytes,
 ):
     game_server = GameServerMock(rust_info_response_bytes, rust_players_response_bytes, rust_rules_response_bytes)
-    async with game_server.run(server) as task:
+
+    task = None
+
+    async with contextlib.AsyncExitStack() as exit_stack:
+        if request.node.get_closest_marker('no_autorun_game_server_mock') is None:
+            task = await exit_stack.enter_async_context(game_server.run(server))
+
         yield game_server
-    await asyncio.gather(task, return_exceptions=True)
+
+    if task is not None and not task.cancelled():
+        await asyncio.gather(task, return_exceptions=True)
+
+
+@pytest.fixture(params=[{}])
+def override_server_proxy_settings(request):
+    """Allow set settings before QueryProxy run
+
+    Use indirect=True option for parametrize this fixture to pass settings
+    """
+    assert isinstance(request.param, dict)
+    return request.param
 
 
 @pytest.fixture()
 async def game_server_proxy(
     event_loop,
+    server,
     game_server_mock,
     a2s_info_cache_lifetime,
     a2s_players_cache_lifetime,
     a2s_rules_cache_lifetime,
+    override_server_proxy_settings,
 ):
-    server_ip, server_port = game_server_mock.server.sockname
+    server_ip, server_port = server.sockname
     proxy = QueryProxy(
         ServerModel(
-            **{
-                'meta': {},
-                'network': {
-                    'server_ip': server_ip,
-                    'server_port': server_port,
-                    'bind_ip': '127.0.0.1',
-                    'bind_port': 27915,
+            **dict_merge(
+                base_dct={
+                    'meta': {},
+                    'network': {
+                        'server_ip': server_ip,
+                        'server_port': server_port,
+                        'bind_ip': '127.0.0.1',
+                        'bind_port': 27915,
+                    },
+                    'a2s_info_cache_lifetime': a2s_info_cache_lifetime,
+                    'a2s_players_cache_lifetime': a2s_players_cache_lifetime,
+                    'a2s_rules_cache_lifetime': a2s_rules_cache_lifetime,
                 },
-                'a2s_info_cache_lifetime': a2s_info_cache_lifetime,
-                'a2s_players_cache_lifetime': a2s_players_cache_lifetime,
-                'a2s_rules_cache_lifetime': a2s_rules_cache_lifetime,
-            }
+                merge_dct=override_server_proxy_settings,
+            )
         )
     )
     task = event_loop.create_task(proxy.run())
@@ -312,7 +340,7 @@ async def test_proxy_players(game_server_proxy, game_server_mock, a2s_players_ca
         assert game_server_mock.received_counter[messages.PlayersRequest] == 2
 
 
-async def test_proxy_wait_ready_graceful_period(game_server_proxy, game_server_mock, caplog):
+async def test_proxy_wait_ready_graceful_period(game_server_proxy, game_server_mock):
     await game_server_mock.shutdown()
     game_server_proxy.resp_cache.clear()
 
@@ -324,3 +352,73 @@ async def test_proxy_wait_ready_graceful_period(game_server_proxy, game_server_m
         await asyncio.wait_for(game_server_proxy.wait_ready(), 0.1)
 
     assert not game_server_proxy.resp_cache
+
+
+@pytest.mark.no_autorun_game_server_mock()
+async def test_gameserver_offline2online__response_on_online_only(game_server_proxy, game_server_mock, server):
+    """Check proxy server respond only when gameserver is online"""
+    game_server_proxy.resp_cache['a2s_info'] = b'random data'
+    game_server_proxy.resp_cache['a2s_players'] = b'random data'
+    game_server_proxy.resp_cache['a2s_rules'] = b'random data'
+
+    await asyncio.wait_for(game_server_proxy.wait_ready(), 1)
+
+    client = await connect(('127.0.0.1', 27915))
+
+    # proxy is ready, but not online, any request will fail
+    assert not game_server_proxy.online
+    await client.send_packet(messages.InfoRequest().encode())
+    with pytest.raises(asyncio.TimeoutError):
+        await asyncio.wait_for(client.recv_packet(), 0.1)
+
+    assert not game_server_mock.received_counter
+
+    # start gameserver, proxy detect it in background and goes online
+    game_server_proxy.resp_cache.clear()
+    async with game_server_mock.run(server):
+        await asyncio.wait_for(game_server_proxy.wait_ready(), 1)
+        assert game_server_proxy.online
+        assert game_server_mock.received_counter[messages.InfoRequest] > 0
+
+        await client.send_packet(messages.InfoRequest().encode())
+        message, data, addr = await asyncio.wait_for(client.recv_packet(), 1)
+        assert isinstance(message, messages.InfoResponse)
+
+
+@pytest.mark.parametrize(
+    'override_server_proxy_settings',
+    [
+        {
+            'max_a2s_fails_before_offline': 1,
+            'a2s_info_cache_lifetime': 0.1,
+            'a2s_players_cache_lifetime': 0.1,
+            'a2s_rules_cache_lifetime': 0.1,
+            'a2s_response_timeout': 0.1,
+        }
+    ],
+)
+async def test_gameserver_online2offline__response_on_online_only(
+    game_server_proxy, game_server_mock, server, override_server_proxy_settings
+):
+    """Check proxy server respond only when gameserver is online"""
+    await asyncio.wait_for(game_server_proxy.wait_ready(), 1)
+    assert game_server_proxy.online
+    assert game_server_mock.received_counter[messages.InfoRequest] > 0
+
+    client = await connect(('127.0.0.1', 27915))
+
+    await client.send_packet(messages.InfoRequest().encode())
+    message, data, addr = await asyncio.wait_for(client.recv_packet(), 1)
+    assert isinstance(message, messages.InfoResponse)
+
+    await game_server_mock.shutdown()
+
+    game_server_proxy.resp_cache.clear()
+    with pytest.raises(asyncio.TimeoutError), async_timeout.timeout(1):
+        await game_server_proxy._update_info()
+
+    assert not game_server_proxy.online
+
+    await client.send_packet(messages.InfoRequest().encode())
+    with pytest.raises(asyncio.TimeoutError):
+        await asyncio.wait_for(client.recv_packet(), 0.1)

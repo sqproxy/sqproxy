@@ -56,6 +56,13 @@ defaults:
   # Default value - 5 seconds - should be enough for soft startup and ignore no-response and start redirection
   wait_ready_graceful_period: 5
 
+  # How many requests should fail in a row to mark server offline.
+  # For offline servers we do not send responses, this prevents ambiguous for monitoring systems
+  # which can handle it to alert/restart or any other behaviour
+  # Do not set this value too low, cause server can block requests due anti-ddos options.
+  # Make sure you adjust a2s_*_cache_lifetime and a2s_response_timeout options before changing this value
+  max_a2s_fails_before_offline: 10
+
 # servers sections is required and can't be empty
 # it can be filled by other .yaml files
 # See 01-dummy-game.yaml
