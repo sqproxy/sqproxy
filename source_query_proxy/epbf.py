@@ -9,7 +9,7 @@ import logging
 import socket
 import struct
 from ipaddress import IPv4Address, ip_address
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 import pyroute2
 
@@ -52,11 +52,9 @@ def _get_addr_interface(addr: IPv4Address):
 def _get_default_interface():
     """Get default network interface"""
     with pyroute2.IPRoute() as ipr:
-        default_routes = ipr.get_default_routes()
-        if default_routes:
+        if default_routes := ipr.get_default_routes():
             idx = default_routes[0].get_attr('RTA_OIF')
-            interface = ipr.get_links(idx)[0].get_attr('IFLA_IFNAME')
-            return interface
+            return ipr.get_links(idx)[0].get_attr('IFLA_IFNAME')
     raise config.ConfigurationError("Cannot determine default network interface")
 
 
@@ -153,8 +151,10 @@ def _populate_maps(bpf, use_ipport_key: bool, mappings: List[Tuple[int, int, str
         mappings: List of (server_port, bind_port, bind_ip) tuples
 
     Raises:
-        RuntimeError: If map population fails
+        Exception: If map population fails (original exception preserved)
     """
+    import traceback
+
     try:
         if use_ipport_key:
             addr_map = bpf.get_table("addr_map")
@@ -172,8 +172,10 @@ def _populate_maps(bpf, use_ipport_key: bool, mappings: List[Tuple[int, int, str
                     addr_map[key] = bind_port
                     logger.info(f"  Map: ({bind_ip}:{server_port}) -> {bind_port}")
                 except Exception as e:
-                    logger.error(f"Failed to populate addr_map for {bind_ip}:{server_port}: {e}")
-                    raise RuntimeError(f"Map population failed for {bind_ip}:{server_port}") from e
+                    logger.error(
+                        f"Failed to populate addr_map for {bind_ip}:{server_port}:\n{traceback.format_exc()}"
+                    )
+                    raise
         else:
             port_map = bpf.get_table("port_map")
 
@@ -182,12 +184,12 @@ def _populate_maps(bpf, use_ipport_key: bool, mappings: List[Tuple[int, int, str
                     port_map[server_port] = bind_port
                     logger.info(f"  Map: {server_port} -> {bind_port}")
                 except Exception as e:
-                    logger.error(f"Failed to populate port_map for {server_port}: {e}")
-                    raise RuntimeError(f"Map population failed for {server_port}") from e
-    except Exception as e:
-        if not isinstance(e, RuntimeError):
-            logger.error(f"Unexpected error during map population: {e}")
-            raise RuntimeError("BPF map population failed") from e
+                    logger.error(
+                        f"Failed to populate port_map for {server_port}:\n{traceback.format_exc()}"
+                    )
+                    raise
+    except Exception:
+        logger.error(f"Error populating BPF maps:\n{traceback.format_exc()}")
         raise
 
 
@@ -206,6 +208,9 @@ def _attach_tc_bpf(interface: str, bpf, ipr) -> Tuple[int, any, any]:
 
     Returns:
         (ifindex, fn_incoming, fn_outgoing) for cleanup
+
+    Raises:
+        RuntimeError: If setup fails, with automatic rollback of partial state
     """
     from pyroute2.netlink.exceptions import NetlinkError
     from pyroute2.netlink.rtnl import protocols
@@ -222,64 +227,101 @@ def _attach_tc_bpf(interface: str, bpf, ipr) -> Tuple[int, any, any]:
     ifindex = ipr.link_lookup(ifname=interface)[0]
     logger.debug(f"Interface {interface} has index {ifindex}")
 
-    # Setup incoming traffic hook (ingress qdisc)
+    # Track what we've added for rollback on failure
+    ingress_added = False
+    ingress_filter_added = False
+    sfq_added = False
+
     try:
-        ipr.tc("add", "ingress", ifindex, "ffff:")
-        logger.debug("Added ingress qdisc")
-    except NetlinkError as exc:
-        if exc.args[1] != 'File exists':
-            raise
-        logger.debug("Ingress qdisc already exists")
+        # Setup incoming traffic hook (ingress qdisc)
+        try:
+            ipr.tc("add", "ingress", ifindex, "ffff:")
+            ingress_added = True
+            logger.debug("Added ingress qdisc")
+        except NetlinkError as exc:
+            if exc.args[1] != 'File exists':
+                raise
+            logger.debug("Ingress qdisc already exists")
 
-    # Attach incoming BPF filter
-    action_incoming = {
-        "kind": "bpf",
-        "fd": fn_incoming.fd,
-        "name": fn_incoming.name,
-        "action": "ok",
-    }
-    ipr.tc(
-        "add-filter",
-        "u32",
-        ifindex,
-        ":1",
-        parent="ffff:",
-        action=[action_incoming],
-        protocol=protocols.ETH_P_ALL,
-        target=0x10000,
-        keys=["0x0/0x0+0"],
-    )
-    logger.info(f"✓ Attached incoming BPF filter to {interface} (ingress)")
+        # Attach incoming BPF filter
+        action_incoming = {
+            "kind": "bpf",
+            "fd": fn_incoming.fd,
+            "name": fn_incoming.name,
+            "action": "ok",
+        }
+        ipr.tc(
+            "add-filter",
+            "u32",
+            ifindex,
+            ":1",
+            parent="ffff:",
+            action=[action_incoming],
+            protocol=protocols.ETH_P_ALL,
+            target=0x10000,
+            keys=["0x0/0x0+0"],
+        )
+        ingress_filter_added = True
+        logger.info(f"✓ Attached incoming BPF filter to {interface} (ingress)")
 
-    # Setup outgoing traffic hook (sfq qdisc)
-    try:
-        ipr.tc("add", "sfq", ifindex, "1:")
-        logger.debug("Added sfq qdisc")
-    except NetlinkError as exc:
-        if exc.args[1] != 'File exists':
-            raise
-        logger.debug("SFQ qdisc already exists")
+        # Setup outgoing traffic hook (sfq qdisc)
+        try:
+            ipr.tc("add", "sfq", ifindex, "1:")
+            sfq_added = True
+            logger.debug("Added sfq qdisc")
+        except NetlinkError as exc:
+            if exc.args[1] != 'File exists':
+                raise
+            logger.debug("SFQ qdisc already exists")
 
-    # Attach outgoing BPF filter
-    action_outgoing = {
-        "kind": "bpf",
-        "fd": fn_outgoing.fd,
-        "name": fn_outgoing.name,
-        "action": "ok",
-    }
-    ipr.tc(
-        "add-filter",
-        "u32",
-        ifindex,
-        ":2",
-        parent="1:",
-        action=[action_outgoing],
-        target=0x10000,
-        keys=["0x0/0x0+0"],
-    )
-    logger.info(f"✓ Attached outgoing BPF filter to {interface} (egress)")
+        # Attach outgoing BPF filter
+        action_outgoing = {
+            "kind": "bpf",
+            "fd": fn_outgoing.fd,
+            "name": fn_outgoing.name,
+            "action": "ok",
+        }
+        ipr.tc(
+            "add-filter",
+            "u32",
+            ifindex,
+            ":2",
+            parent="1:",
+            action=[action_outgoing],
+            target=0x10000,
+            keys=["0x0/0x0+0"],
+        )
+        logger.info(f"✓ Attached outgoing BPF filter to {interface} (egress)")
 
-    return ifindex, fn_incoming, fn_outgoing
+        return ifindex, fn_incoming, fn_outgoing
+
+    except Exception as e:
+        # Rollback partial state on failure
+        logger.error(f"Failed to attach tc bpf, rolling back partial state: {e}")
+
+        # Clean up in reverse order of creation
+        if sfq_added:
+            try:
+                ipr.tc("del", "sfq", ifindex, "1:")
+                logger.debug("Rolled back sfq qdisc")
+            except Exception as cleanup_e:
+                logger.warning(f"Failed to rollback sfq qdisc: {cleanup_e}")
+
+        if ingress_filter_added:
+            try:
+                ipr.tc("del-filter", "u32", ifindex, ":1", parent="ffff:")
+                logger.debug("Rolled back ingress filter")
+            except Exception as cleanup_e:
+                logger.warning(f"Failed to rollback ingress filter: {cleanup_e}")
+
+        if ingress_added:
+            try:
+                ipr.tc("del", "ingress", ifindex, "ffff:")
+                logger.debug("Rolled back ingress qdisc")
+            except Exception as cleanup_e:
+                logger.warning(f"Failed to rollback ingress qdisc: {cleanup_e}")
+
+        raise RuntimeError(f"Failed to attach tc bpf, partial state rolled back") from e
 
 
 def _cleanup_tc(ipr, ifindex: int, safe: bool = False):
@@ -296,7 +338,10 @@ def _cleanup_tc(ipr, ifindex: int, safe: bool = False):
         ipr.tc("del", "ingress", ifindex, "ffff:")
         logger.debug("Removed ingress qdisc")
     except NetlinkError as exc:
-        if not safe or exc.args[1] != 'Invalid argument':
+        if safe and exc.args[1] == 'Invalid argument':
+            # Silently ignore if qdisc doesn't exist
+            pass
+        else:
             logger.error(f"Failed to remove ingress qdisc: {exc}")
             if not safe:
                 raise
@@ -305,114 +350,246 @@ def _cleanup_tc(ipr, ifindex: int, safe: bool = False):
         ipr.tc("del", "sfq", ifindex, "1:")
         logger.debug("Removed sfq qdisc")
     except NetlinkError as exc:
-        if not safe or exc.args[1] != 'Invalid argument':
+        if safe and exc.args[1] == 'Invalid argument':
+            # Silently ignore if qdisc doesn't exist
+            pass
+        else:
             logger.error(f"Failed to remove sfq qdisc: {exc}")
             if not safe:
                 raise
 
 
-async def run_ebpf_redirection():
-    """Main entry point for eBPF redirection
+class EBPFRedirector:
+    """Async lifecycle manager for eBPF packet redirection
 
-    Generates BPF program, compiles it, attaches to network interface,
-    and keeps it running. Registers cleanup handlers for graceful shutdown.
+    Manages the complete lifecycle of eBPF-based packet redirection:
+    - Compiles BPF programs using the template engine
+    - Attaches programs to network interfaces via tc
+    - Populates BPF maps with port mappings
+    - Handles cleanup and resource management
+    - Supports start/stop/restart for dynamic reconfiguration
+
+    Usage:
+        # As async context manager
+        async with EBPFRedirector() as redirector:
+            # eBPF is active
+            await asyncio.sleep(3600)
+        # Automatic cleanup on exit
+
+        # Or manual lifecycle management
+        redirector = EBPFRedirector()
+        await redirector.start()
+        # ... later ...
+        await redirector.restart()  # Reload config
+        # ... later ...
+        await redirector.stop()
     """
-    import atexit
+
+    def __init__(self):
+        """Initialize eBPF redirector (does not start redirection)"""
+        self._bpf = None
+        self._ipr = None
+        self._ifindex: Optional[int] = None
+        self._fn_incoming = None
+        self._fn_outgoing = None
+        self._interface: Optional[str] = None
+        self._running = False
+
+    @property
+    def is_running(self) -> bool:
+        """Check if eBPF redirection is currently active"""
+        return self._running
+
+    @property
+    def interface(self) -> Optional[str]:
+        """Get the network interface being used"""
+        return self._interface
+
+    async def start(self):
+        """Start eBPF packet redirection
+
+        Raises:
+            RuntimeError: If already running or if start fails
+            config.ConfigurationError: If configuration is invalid
+        """
+        if self._running:
+            raise RuntimeError("eBPF redirection is already running")
+
+        logger.info("=== Starting eBPF packet redirection ===")
+
+        try:
+            BPF = _import_bcc()
+
+            # Collect server configurations
+            logger.info("Collecting server configurations...")
+            use_ipport_key, interface, mappings = _collect_server_mappings()
+            self._interface = interface
+
+            logger.info(f"Mode: {'IP+port' if use_ipport_key else 'port-only'}")
+            logger.info(f"Interface: {interface}")
+            logger.info(f"Servers: {len(mappings)}")
+
+            # Generate BPF program
+            logger.info("Generating BPF C code...")
+            bpf_code = _generate_bpf_program(use_ipport_key)
+            logger.debug(f"Generated {len(bpf_code)} bytes of BPF C code")
+
+            # Compile BPF program
+            logger.info("Compiling BPF program with BCC...")
+            try:
+                self._bpf = BPF(text=bpf_code, debug=0)
+            except Exception as e:
+                logger.error(f"BPF compilation failed: {e}")
+                logger.debug(f"Generated BPF code:\n{bpf_code}")
+                raise RuntimeError(f"BPF compilation failed: {e}") from e
+
+            logger.info("✓ BPF program compiled successfully")
+
+            # Populate maps with port mappings
+            logger.info("Populating BPF maps...")
+            _populate_maps(self._bpf, use_ipport_key, mappings)
+            logger.info(f"✓ Populated {len(mappings)} port mappings")
+
+            # Create IPRoute instance for tc operations
+            self._ipr = pyroute2.IPRoute()
+
+            # Attach to tc
+            logger.info(f"Attaching BPF programs to interface {interface}...")
+            try:
+                self._ifindex, self._fn_incoming, self._fn_outgoing = _attach_tc_bpf(
+                    interface, self._bpf, self._ipr
+                )
+            except Exception as e:
+                logger.error(f"Failed to attach BPF programs: {e}")
+                self._ipr.close()
+                self._ipr = None
+                raise RuntimeError(f"tc attachment failed: {e}") from e
+
+            logger.info("✓ BPF programs attached successfully")
+            logger.info("=== eBPF redirection is active ===")
+
+            self._running = True
+
+        except Exception:
+            # Cleanup on failure
+            await self._cleanup()
+            raise
+
+    async def stop(self):
+        """Stop eBPF packet redirection and cleanup resources
+
+        Safe to call multiple times (idempotent).
+        """
+        if not self._running:
+            logger.debug("eBPF redirection is not running, skipping stop")
+            return
+
+        logger.info("Stopping eBPF redirection...")
+        self._running = False
+        await self._cleanup()
+        logger.info("✓ eBPF redirection stopped")
+
+    async def restart(self):
+        """Restart eBPF redirection (stop then start)
+
+        Useful for reloading configuration changes on the fly.
+
+        Raises:
+            RuntimeError: If restart fails
+            config.ConfigurationError: If new configuration is invalid
+        """
+        logger.info("Restarting eBPF redirection...")
+        await self.stop()
+        await self.start()
+        logger.info("✓ eBPF redirection restarted")
+
+    async def _cleanup(self):
+        """Internal cleanup method - idempotent and async-safe"""
+        if self._ipr is None:
+            return
+
+        logger.debug("Cleaning up tc qdiscs and resources...")
+
+        try:
+            if self._ifindex is not None:
+                _cleanup_tc(self._ipr, self._ifindex, safe=True)
+        finally:
+            # Always close IPRoute
+            try:
+                self._ipr.close()
+            except Exception as e:
+                logger.warning(f"Error closing IPRoute: {e}")
+            finally:
+                self._ipr = None
+                self._ifindex = None
+                self._fn_incoming = None
+                self._fn_outgoing = None
+                self._bpf = None
+                self._interface = None
+
+        logger.debug("✓ Cleanup complete")
+
+    async def __aenter__(self):
+        """Async context manager entry"""
+        await self.start()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit"""
+        await self.stop()
+        return False
+
+
+async def run_ebpf_redirection():
+    """Main entry point for eBPF redirection (legacy compatibility)
+
+    This function provides backward compatibility with the old interface.
+    It runs eBPF redirection until interrupted (Ctrl+C or signal).
+
+    For new code, prefer using EBPFRedirector class directly for better
+    control over lifecycle and support for restart/reload operations.
+
+    Example migration:
+        # Old way (this function)
+        await run_ebpf_redirection()
+
+        # New way (recommended)
+        async with EBPFRedirector() as redirector:
+            # Your application logic here
+            await asyncio.Event().wait()  # Wait forever
+    """
     import signal
 
-    logger.info("=== Starting eBPF packet redirection ===")
+    redirector = EBPFRedirector()
 
-    BPF = _import_bcc()
+    # Signal handler for graceful shutdown
+    shutdown_event = asyncio.Event()
 
-    # Collect server configurations
-    logger.info("Collecting server configurations...")
-    use_ipport_key, interface, mappings = _collect_server_mappings()
-
-    logger.info(f"Mode: {'IP+port' if use_ipport_key else 'port-only'}")
-    logger.info(f"Interface: {interface}")
-    logger.info(f"Servers: {len(mappings)}")
-
-    # Generate BPF program
-    logger.info("Generating BPF C code...")
-    bpf_code = _generate_bpf_program(use_ipport_key)
-    logger.debug(f"Generated {len(bpf_code)} bytes of BPF C code")
-
-    # Compile BPF program
-    logger.info("Compiling BPF program with BCC...")
-    try:
-        bpf = BPF(text=bpf_code, debug=0)
-    except Exception as e:
-        logger.error(f"BPF compilation failed: {e}")
-        logger.debug(f"Generated BPF code:\n{bpf_code}")
-        raise RuntimeError(f"BPF compilation failed: {e}") from e
-
-    logger.info("✓ BPF program compiled successfully")
-
-    # Populate maps with port mappings
-    logger.info("Populating BPF maps...")
-    _populate_maps(bpf, use_ipport_key, mappings)
-    logger.info(f"✓ Populated {len(mappings)} port mappings")
-
-    # Create IPRoute instance for tc operations
-    ipr = pyroute2.IPRoute()
-
-    # Attach to tc
-    logger.info(f"Attaching BPF programs to interface {interface}...")
-    try:
-        ifindex, fn_incoming, fn_outgoing = _attach_tc_bpf(interface, bpf, ipr)
-    except Exception as e:
-        logger.error(f"Failed to attach BPF programs: {e}")
-        ipr.close()
-        raise RuntimeError(f"tc attachment failed: {e}") from e
-
-    logger.info("✓ BPF programs attached successfully")
-
-    # Track cleanup state to avoid double cleanup
-    cleanup_done = False
-
-    def cleanup_handler():
-        nonlocal cleanup_done
-        if cleanup_done:
-            return
-        cleanup_done = True
-
-        logger.info("Cleaning up tc qdiscs...")
-        try:
-            _cleanup_tc(ipr, ifindex, safe=True)
-        finally:
-            ipr.close()
-        logger.info("✓ Cleanup complete")
-
-    # Register cleanup for normal exit
-    atexit.register(cleanup_handler)
-
-    # Register signal handlers for graceful shutdown
     def signal_handler(signum, frame):
         logger.info(f"Received signal {signum}, shutting down...")
-        cleanup_handler()
-        import sys
-        sys.exit(0)
+        shutdown_event.set()
 
+    # Register signal handlers (let application handle SIGTERM/SIGINT)
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
 
-    logger.info("=== eBPF redirection is active ===")
-    logger.info("Press Ctrl+C to stop")
-
-    # Keep running until interrupted
     try:
-        while True:
-            await asyncio.sleep(1)
+        # Start eBPF redirection
+        await redirector.start()
+
+        logger.info("Press Ctrl+C to stop")
+
+        # Wait for shutdown signal
+        await shutdown_event.wait()
+
     except (KeyboardInterrupt, asyncio.CancelledError):
         logger.info("Shutting down eBPF redirection...")
-        # Explicit cleanup on interruption
-        cleanup_handler()
     except Exception as e:
-        logger.error(f"Unexpected error in redirection loop: {e}")
-        cleanup_handler()
+        logger.error(f"Unexpected error in redirection: {e}")
         raise
     finally:
-        logger.info("eBPF redirection stopped")
+        # Always cleanup
+        await redirector.stop()
 
 
 # Backward compatibility: keep get_ebpf_program_run_args for tests

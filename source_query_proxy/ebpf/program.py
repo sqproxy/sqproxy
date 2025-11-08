@@ -96,25 +96,21 @@ class BPFProgram:
         parts = []
 
         # Includes
-        for inc in self.includes:
-            parts.append(f"#include {inc}")
+        parts.extend(f"#include {inc}" for inc in self.includes)
         parts.append("")
 
         # Structs
         if self.structs:
             for struct in self.structs:
-                parts.append(struct.render())
-                parts.append("")
+                parts.extend([struct.render(), ""])
 
         # Maps
         if self.maps:
-            for map in self.maps:
-                parts.append(map.render())
+            parts.extend(bpf_map.render() for bpf_map in self.maps)
             parts.append("")
 
         # Functions
         for func in self.functions:
-            parts.append(func.render())
-            parts.append("")
+            parts.extend([func.render(), ""])
 
         return "\n".join(parts)

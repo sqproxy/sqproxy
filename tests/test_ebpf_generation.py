@@ -42,20 +42,20 @@ class TestBPFMap:
 
     def test_simple_hash_map(self):
         """Test generating a BPF_HASH map"""
-        map = BPFMap("port_map", "u16", "u16", max_entries=1024)
-        code = map.render()
+        bpf_map = BPFMap("port_map", "u16", "u16", max_entries=1024)
+        code = bpf_map.render()
         assert code == "BPF_HASH(port_map, u16, u16, 1024);"
 
     def test_struct_key_map(self):
         """Test map with struct key type"""
-        map = BPFMap("addr_map", "struct addr_key_t", "u16", max_entries=2048)
-        code = map.render()
+        bpf_map = BPFMap("addr_map", "struct addr_key_t", "u16", max_entries=2048)
+        code = bpf_map.render()
         assert code == "BPF_HASH(addr_map, struct addr_key_t, u16, 2048);"
 
     def test_default_max_entries(self):
         """Test default max_entries value"""
-        map = BPFMap("test_map", "u32", "u32")
-        code = map.render()
+        bpf_map = BPFMap("test_map", "u32", "u32")
+        code = bpf_map.render()
         assert "10240" in code  # Default max_entries
 
 

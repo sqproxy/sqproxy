@@ -38,8 +38,10 @@ class BPFStruct(BPFElement):
     def render(self) -> str:
         """Generate C struct definition"""
         lines = [f"struct {self.name} {{"]
-        for field_type, field_name in self.fields:
-            lines.append(f"    {field_type} {field_name};")
+        lines.extend(
+            f"    {field_type} {field_name};"
+            for field_type, field_name in self.fields
+        )
         lines.append("};")
         return "\n".join(lines)
 
@@ -119,19 +121,17 @@ class BPFFunction(BPFElement):
     def render(self) -> str:
         """Generate complete function with signature and body"""
         # Build parameter list
-        param_strs = []
-        for param_type, param_name in self.params:
-            param_strs.append(f"{param_type} {param_name}")
-        params_str = ", ".join(param_strs)
+        params_str = ", ".join(
+            f"{param_type} {param_name}"
+            for param_type, param_name in self.params
+        )
 
         # Build function signature
         signature = f"{self.return_type} {self.name}({params_str})"
 
         # Build function body
         lines = [signature + " {"]
-        for code_block in self.body_parts:
-            # Add code block (already should be indented)
-            lines.append(code_block)
+        lines.extend(self.body_parts)
         lines.append("}")
 
         return "\n".join(lines)
