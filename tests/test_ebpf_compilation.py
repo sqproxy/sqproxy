@@ -169,6 +169,50 @@ class TestBPFCompilation:
         assert port_map[server_port].value == bind_port
 
 
+@pytest.mark.skipif(not BCC_AVAILABLE, reason="BCC not installed")
+class TestBPFCompilationErrors:
+    """Test error handling during BPF compilation"""
+
+    def test_invalid_bpf_code_compilation_failure(self):
+        """Test that BCC properly reports compilation errors"""
+        # Invalid C code that should fail to compile
+        invalid_code = """
+        #include <uapi/linux/bpf.h>
+
+        int invalid_function(struct __sk_buff *skb) {
+            // Syntax error: missing semicolon
+            int x = 5
+            return x;
+        }
+        """
+
+        with pytest.raises(Exception) as exc_info:
+            BPF(text=invalid_code, debug=0)
+
+        # Should get a compilation error from BCC
+        assert exc_info.value is not None
+
+    def test_undefined_function_compilation_failure(self):
+        """Test compilation error for undefined BPF helpers"""
+        # Code using non-existent BPF helper
+        invalid_code = """
+        #include <uapi/linux/bpf.h>
+        #include <uapi/linux/pkt_cls.h>
+
+        int test_func(struct __sk_buff *skb) {
+            // Non-existent function
+            bpf_nonexistent_helper(skb);
+            return TC_ACT_OK;
+        }
+        """
+
+        with pytest.raises(Exception) as exc_info:
+            BPF(text=invalid_code, debug=0)
+
+        # Should get a compilation error
+        assert exc_info.value is not None
+
+
 @pytest.mark.skipif(BCC_AVAILABLE, reason="Testing BCC unavailability handling")
 def test_graceful_handling_without_bcc():
     """Test that code generation works even without BCC installed"""

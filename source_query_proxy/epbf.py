@@ -45,17 +45,18 @@ async def run_ebpf_redirection():
             await asyncio.Event().wait()  # Wait forever
     """
     redirector = EBPFRedirector()
+    loop = asyncio.get_running_loop()
 
     # Signal handler for graceful shutdown
     shutdown_event = asyncio.Event()
 
-    def signal_handler(signum, frame):
-        logger.info(f"Received signal {signum}, shutting down...")
+    def signal_handler():
+        logger.info("Received shutdown signal, shutting down...")
         shutdown_event.set()
 
-    # Register signal handlers (let application handle SIGTERM/SIGINT)
-    signal.signal(signal.SIGTERM, signal_handler)
-    signal.signal(signal.SIGINT, signal_handler)
+    # Register signal handlers using asyncio (async-safe)
+    loop.add_signal_handler(signal.SIGTERM, signal_handler)
+    loop.add_signal_handler(signal.SIGINT, signal_handler)
 
     try:
         # Start eBPF redirection
@@ -72,6 +73,9 @@ async def run_ebpf_redirection():
         logger.error(f"Unexpected error in redirection: {e}")
         raise
     finally:
+        # Remove signal handlers
+        loop.remove_signal_handler(signal.SIGTERM)
+        loop.remove_signal_handler(signal.SIGINT)
         # Always cleanup
         await redirector.stop()
 
@@ -81,14 +85,21 @@ def get_ebpf_program_run_args():
     """Legacy function for backward compatibility with tests
 
     This function is deprecated and will be removed in the future.
+
+    Returns:
+        List of server mapping arguments
+
+    Raises:
+        RuntimeError: If server mappings collection fails
     """
     logger.warning("get_ebpf_program_run_args() is deprecated")
 
     # Collect mappings using new logic
     try:
         use_ipport_key, interface, mappings = collect_server_mappings()
-    except Exception:
-        return []
+    except Exception as e:
+        logger.error(f"Failed to collect server mappings: {e}", exc_info=True)
+        raise RuntimeError("Failed to collect eBPF program arguments") from e
 
     args = []
     for server_port, bind_port, bind_ip in mappings:

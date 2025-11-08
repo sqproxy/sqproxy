@@ -24,13 +24,21 @@ def rollback_tc_bpf(ipr: Any, ifindex: int, ingress_added: bool, ingress_filter_
         ingress_added: Whether ingress qdisc was added
         ingress_filter_added: Whether ingress filter was added
         sfq_added: Whether sfq qdisc was added
+
+    Note:
+        All rollback steps are attempted independently. If multiple steps fail,
+        all errors are logged individually.
     """
+    # Collect errors from all rollback steps
+    errors = []
+
     # Clean up in reverse order of creation
     if sfq_added:
         try:
             ipr.tc("del", "sfq", ifindex, "1:")
             logger.debug("Rolled back sfq qdisc")
         except Exception as cleanup_e:
+            errors.append(f"sfq qdisc: {cleanup_e}")
             logger.warning(f"Failed to rollback sfq qdisc: {cleanup_e}")
 
     if ingress_filter_added:
@@ -38,6 +46,7 @@ def rollback_tc_bpf(ipr: Any, ifindex: int, ingress_added: bool, ingress_filter_
             ipr.tc("del-filter", "u32", ifindex, ":1", parent="ffff:")
             logger.debug("Rolled back ingress filter")
         except Exception as cleanup_e:
+            errors.append(f"ingress filter: {cleanup_e}")
             logger.warning(f"Failed to rollback ingress filter: {cleanup_e}")
 
     if ingress_added:
@@ -45,7 +54,12 @@ def rollback_tc_bpf(ipr: Any, ifindex: int, ingress_added: bool, ingress_filter_
             ipr.tc("del", "ingress", ifindex, "ffff:")
             logger.debug("Rolled back ingress qdisc")
         except Exception as cleanup_e:
+            errors.append(f"ingress qdisc: {cleanup_e}")
             logger.warning(f"Failed to rollback ingress qdisc: {cleanup_e}")
+
+    # Log summary if there were errors
+    if errors:
+        logger.error(f"Rollback encountered {len(errors)} error(s): {'; '.join(errors)}")
 
 
 def attach_tc_bpf(interface: str, bpf: Any, ipr: Any) -> Tuple[int, Any, Any]:
@@ -79,7 +93,10 @@ def attach_tc_bpf(interface: str, bpf: Any, ipr: Any) -> Tuple[int, Any, Any]:
     logger.info(f"Loaded BPF functions: incoming={fn_incoming.name}, outgoing={fn_outgoing.name}")
 
     # Get interface index
-    ifindex = ipr.link_lookup(ifname=interface)[0]
+    links = ipr.link_lookup(ifname=interface)
+    if not links:
+        raise RuntimeError(f"Network interface '{interface}' not found")
+    ifindex = links[0]
     logger.debug(f"Interface {interface} has index {ifindex}")
 
     # Track what we've added for rollback on failure
@@ -171,18 +188,22 @@ def cleanup_tc(ipr: Any, ifindex: int, safe: bool = False) -> None:
         ipr.tc("del", "ingress", ifindex, "ffff:")
         logger.debug("Removed ingress qdisc")
     except NetlinkError as exc:
-        # Only ignore if safe mode and qdisc doesn't exist
-        if not (safe and exc.args[1] == 'Invalid argument'):
-            logger.error(f"Failed to remove ingress qdisc: {exc}")
-            if not safe:
-                raise
+        # Ignore 'Invalid argument' if safe mode (qdisc doesn't exist)
+        is_not_found = exc.args[1] == 'Invalid argument'
+        if safe and is_not_found:
+            return
+        logger.error(f"Failed to remove ingress qdisc: {exc}")
+        if not safe:
+            raise
 
     try:
         ipr.tc("del", "sfq", ifindex, "1:")
         logger.debug("Removed sfq qdisc")
     except NetlinkError as exc:
-        # Only ignore if safe mode and qdisc doesn't exist
-        if not (safe and exc.args[1] == 'Invalid argument'):
-            logger.error(f"Failed to remove sfq qdisc: {exc}")
-            if not safe:
-                raise
+        # Ignore 'Invalid argument' if safe mode (qdisc doesn't exist)
+        is_not_found = exc.args[1] == 'Invalid argument'
+        if safe and is_not_found:
+            return
+        logger.error(f"Failed to remove sfq qdisc: {exc}")
+        if not safe:
+            raise

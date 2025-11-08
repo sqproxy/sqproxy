@@ -127,9 +127,14 @@ class EBPFRedirector:
 
             self._running = True
 
-        except Exception:
-            # Cleanup on failure
-            await self._cleanup()
+        except (RuntimeError, ValueError, OSError) as exc:
+            # Cleanup on failure, ensuring both exceptions are visible
+            try:
+                await self._cleanup()
+            except Exception as cleanup_exc:
+                logger.error(f"Exception during cleanup after error: {cleanup_exc}", exc_info=True)
+                # Chain the exceptions for full visibility
+                raise exc from cleanup_exc
             raise
 
     async def stop(self):

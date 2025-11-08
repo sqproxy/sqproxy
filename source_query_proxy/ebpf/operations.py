@@ -60,11 +60,15 @@ class PacketRedirectOperation(BPFOperation):
             server_port: Game server port to redirect from
             bind_port: Proxy bind port to redirect to
             bind_ip: Bind IP address (if None, uses port-only lookup)
-            use_ipport_key: Use IP+port composite key instead of port-only
+            use_ipport_key: Use IP+port composite key instead of port-only.
+                Note: If bind_ip is provided, use_ipport_key is automatically
+                set to True regardless of the explicit value. To use port-only
+                lookup, set bind_ip=None and use_ipport_key=False.
         """
         self.server_port = server_port
         self.bind_port = bind_port
         self.bind_ip = bind_ip
+        # bind_ip presence takes precedence over explicit use_ipport_key
         self.use_ipport_key = use_ipport_key or (bind_ip is not None)
 
     def apply(self, program: 'BPFProgram'):

@@ -36,6 +36,37 @@ class TestBPFStruct:
         assert "struct empty_t {" in code
         assert "};" in code
 
+    def test_struct_with_unsupported_type(self):
+        """Test struct generation with unsupported field type"""
+        # Template engine doesn't validate types - passes them through
+        struct = BPFStruct("custom_type_t", [
+            ("foo32", "value"),
+        ])
+        code = struct.render()
+        # Should still generate code with the custom type
+        assert "foo32 value;" in code
+
+    def test_struct_with_empty_field_names(self):
+        """Test struct with empty field type or name"""
+        struct = BPFStruct("empty_field_t", [
+            ("", "ip"),
+            ("u32", ""),
+        ])
+        code = struct.render()
+        # Should generate code even with empty fields
+        assert " ip;" in code
+        assert "u32 ;" in code
+
+    def test_struct_with_duplicate_field_names(self):
+        """Test struct with duplicate field names"""
+        struct = BPFStruct("dup_field_t", [
+            ("u32", "ip"),
+            ("u16", "ip"),
+        ])
+        code = struct.render()
+        # Both fields present with duplicate names (BCC will error on this)
+        assert code.count("ip;") == 2
+
 
 class TestBPFMap:
     """Test BPFMap code generation"""
@@ -57,6 +88,34 @@ class TestBPFMap:
         bpf_map = BPFMap("test_map", "u32", "u32")
         code = bpf_map.render()
         assert "10240" in code  # Default max_entries
+
+    def test_different_map_types(self):
+        """Test generating maps with different map_type values"""
+        # BPF_ARRAY
+        bpf_array = BPFMap("array_map", "u32", "u64", map_type="BPF_ARRAY", max_entries=128)
+        code_array = bpf_array.render()
+        assert code_array == "BPF_ARRAY(array_map, u32, u64, 128);"
+
+        # BPF_PERCPU_HASH
+        bpf_percpu = BPFMap("percpu_map", "u32", "u64", map_type="BPF_PERCPU_HASH", max_entries=256)
+        code_percpu = bpf_percpu.render()
+        assert code_percpu == "BPF_PERCPU_HASH(percpu_map, u32, u64, 256);"
+
+    def test_map_with_zero_max_entries(self):
+        """Test map with zero max_entries (invalid but not validated)"""
+        # Template engine doesn't validate max_entries
+        bpf_map = BPFMap("zero_map", "u32", "u32", max_entries=0)
+        code = bpf_map.render()
+        # Should still generate code (BCC will error on this)
+        assert "BPF_HASH(zero_map, u32, u32, 0);" == code
+
+    def test_map_with_negative_max_entries(self):
+        """Test map with negative max_entries (invalid but not validated)"""
+        # Template engine doesn't validate max_entries
+        bpf_map = BPFMap("neg_map", "u32", "u32", max_entries=-1)
+        code = bpf_map.render()
+        # Should still generate code (BCC will error on this)
+        assert "BPF_HASH(neg_map, u32, u32, -1);" == code
 
 
 class TestBPFFunction:
