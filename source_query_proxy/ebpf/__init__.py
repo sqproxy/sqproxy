@@ -1,15 +1,19 @@
 """
-eBPF Template Engine for sqproxy
+eBPF Template Engine and Runtime for sqproxy
 
-This package provides a class-based template engine for generating eBPF C code.
-It replaces the external sqredirect dependency with internal code generation.
+This package provides a complete solution for eBPF-based packet redirection:
 
-Main components:
+Template Engine Components:
 - elements: Base classes for BPF code elements (BPFStruct, BPFMap, BPFFunction)
 - program: BPFProgram orchestrator that generates complete BPF C code
 - operations: High-level composable operations (PacketRedirectOperation, etc.)
 
-Usage:
+Runtime Components:
+- runtime: Network helpers, BPF generation, and map population
+- tc: Traffic control (tc) operations for attaching BPF programs
+- redirector: EBPFRedirector lifecycle manager for async applications
+
+Usage (Template Engine):
     from source_query_proxy.ebpf import BPFProgram, PacketRedirectOperation
 
     program = BPFProgram("redirect")
@@ -19,6 +23,13 @@ Usage:
         bind_ip="192.168.1.1"
     ))
     bpf_c_code = program.render()
+
+Usage (Runtime):
+    from source_query_proxy.ebpf.redirector import EBPFRedirector
+
+    async with EBPFRedirector() as redirector:
+        # eBPF is active
+        await asyncio.Event().wait()
 """
 
 from .elements import BPFElement, BPFStruct, BPFMap, BPFFunction
@@ -26,6 +37,7 @@ from .program import BPFProgram
 from .operations import BPFOperation, PacketRedirectOperation
 
 __all__ = [
+    # Template engine
     'BPFElement',
     'BPFStruct',
     'BPFMap',
@@ -33,4 +45,8 @@ __all__ = [
     'BPFProgram',
     'BPFOperation',
     'PacketRedirectOperation',
+    # Runtime components available via submodules:
+    # - ebpf.runtime: Helpers and utilities
+    # - ebpf.tc: Traffic control operations
+    # - ebpf.redirector: EBPFRedirector class
 ]
