@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  bpf-compile-test:
+    build:
+      context: ../..
+      dockerfile: tests/docker/Dockerfile.bpf-test
+    container_name: sqproxy-bpf-test
+    # Note: We don't need --privileged for compilation tests
+    # Only for actually loading BPF programs into the kernel
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: >
+      sh -c "
+        echo '=== Running eBPF Code Generation Tests ===' &&
+        python3 -m pytest tests/test_ebpf_generation.py -v &&
+        echo '' &&
+        echo '=== Running eBPF Compilation Tests with BCC ===' &&
+        python3 -m pytest tests/test_ebpf_compilation.py -v
+      "

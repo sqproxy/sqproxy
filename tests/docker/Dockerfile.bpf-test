@@ -1,0 +1,47 @@
+# Dockerfile for eBPF/BCC testing
+#
+# This container can compile BPF programs using BCC.
+# Note: Actually loading BPF programs requires --privileged and kernel access.
+
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    python3-dev \
+    build-essential \
+    cmake \
+    git \
+    libbpf-dev \
+    linux-headers-generic \
+    bpfcc-tools \
+    python3-bpfcc \
+    iproute2 \
+    iputils-ping \
+    tcpdump \
+    net-tools \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Poetry
+RUN pip3 install poetry
+
+# Set working directory
+WORKDIR /app
+
+# Copy project files
+COPY pyproject.toml poetry.lock* ./
+COPY source_query_proxy ./source_query_proxy/
+COPY tests ./tests/
+COPY README.rst setup.cfg ./
+
+# Install Python dependencies
+RUN poetry config virtualenvs.create false && \
+    poetry install --no-root && \
+    rm -rf $(python3 -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')/tests || true
+
+# Default command runs BPF compilation tests
+CMD ["python3", "-m", "pytest", "tests/test_ebpf_compilation.py", "-v"]
