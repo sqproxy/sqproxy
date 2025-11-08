@@ -18,6 +18,36 @@ except ImportError:
     BCC_AVAILABLE = False
 
 
+def _compile_and_verify_bpf(bpf_code, expected_map_name):
+    """Helper to compile BPF code and verify basic functionality
+
+    Args:
+        bpf_code: BPF C code to compile
+        expected_map_name: Name of the expected map ("port_map" or "addr_map")
+
+    Returns:
+        BPF instance
+
+    Raises:
+        AssertionError: If compilation or verification fails
+    """
+    # Compile with BCC
+    bpf_instance = BPF(text=bpf_code, debug=0)
+
+    # Verify functions are loadable (SCHED_ACT mode like sqredirect)
+    incoming_fn = bpf_instance.load_func("incoming", BPF.SCHED_ACT)
+    outgoing_fn = bpf_instance.load_func("outgoing", BPF.SCHED_ACT)
+
+    assert incoming_fn is not None, "incoming function not loaded"
+    assert outgoing_fn is not None, "outgoing function not loaded"
+
+    # Check that expected map is created
+    bpf_map = bpf_instance.get_table(expected_map_name)
+    assert bpf_map is not None, f"{expected_map_name} not found"
+
+    return bpf_instance
+
+
 @pytest.mark.skipif(not BCC_AVAILABLE, reason="BCC not installed")
 class TestBPFCompilation:
     """Test BPF code compilation with BCC"""
@@ -37,25 +67,9 @@ class TestBPFCompilation:
         assert "int incoming" in bpf_code
         assert "int outgoing" in bpf_code
 
-        # Try to compile with BCC
+        # Compile and verify
         try:
-            b = BPF(text=bpf_code, debug=0)
-
-            # Verify functions are loadable (but don't actually load them)
-            # This checks that the BPF bytecode is valid
-            assert hasattr(b, "load_func")
-
-            # Check that our functions exist in the compiled program
-            incoming_fn = b.load_func("incoming", BPF.SCHED_CLS)
-            outgoing_fn = b.load_func("outgoing", BPF.SCHED_CLS)
-
-            assert incoming_fn is not None
-            assert outgoing_fn is not None
-
-            # Check that maps are created
-            port_map = b.get_table("port_map")
-            assert port_map is not None
-
+            _compile_and_verify_bpf(bpf_code, "port_map")
         except Exception as e:
             pytest.fail(f"BPF compilation failed: {e}\n\nGenerated code:\n{bpf_code}")
 
@@ -78,21 +92,9 @@ class TestBPFCompilation:
         assert "int incoming" in bpf_code
         assert "int outgoing" in bpf_code
 
-        # Try to compile with BCC
+        # Compile and verify
         try:
-            b = BPF(text=bpf_code, debug=0)
-
-            # Verify functions are loadable
-            incoming_fn = b.load_func("incoming", BPF.SCHED_CLS)
-            outgoing_fn = b.load_func("outgoing", BPF.SCHED_CLS)
-
-            assert incoming_fn is not None
-            assert outgoing_fn is not None
-
-            # Check that addr_map is created
-            addr_map = b.get_table("addr_map")
-            assert addr_map is not None
-
+            _compile_and_verify_bpf(bpf_code, "addr_map")
         except Exception as e:
             pytest.fail(f"BPF compilation failed: {e}\n\nGenerated code:\n{bpf_code}")
 

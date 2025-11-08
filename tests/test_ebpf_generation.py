@@ -263,14 +263,46 @@ class TestIntegration:
         """Test applying multiple operations to same program"""
         program = BPFProgram("multi")
 
-        # Apply redirect operation
+        # Apply first redirect operation (port-only)
         op1 = PacketRedirectOperation(server_port=27015, bind_port=27016)
         program.apply_operation(op1)
 
-        # Could apply more operations here in the future
-        # For now, just verify it works
+        # In practice, we generate one BPF program and populate maps dynamically
+        # But this tests that the template engine can handle multiple operations
         code = program.render()
-        assert len(code) > 0
+
+        # Verify code is generated
+        assert len(code) > 1000
+        assert "int incoming" in code
+        assert "int outgoing" in code
+        assert "port_map" in code
+
+    def test_multiple_ipport_mappings(self):
+        """Test that a single program can handle multiple IP+port mappings"""
+        program = BPFProgram("multi_ipport")
+
+        # Generate program with IP+port mode
+        op = PacketRedirectOperation(
+            server_port=27015,
+            bind_port=27016,
+            bind_ip="192.168.1.1",
+            use_ipport_key=True
+        )
+        program.apply_operation(op)
+        code = program.render()
+
+        # Verify addr_map is created
+        assert "BPF_HASH(addr_map, struct addr_key_t, u16" in code
+        assert "struct addr_key_t" in code
+
+        # Verify lookup code exists
+        assert "addr_map.lookup" in code
+
+        # The same program can handle multiple IP+port combinations
+        # by populating the addr_map with different keys at runtime
+        # Each key is (IP, port) tuple
+        assert "key.ip" in code
+        assert "key.port" in code
 
     def test_typical_usage_pattern(self):
         """Test the typical usage pattern from docstrings"""

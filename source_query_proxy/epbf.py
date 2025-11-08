@@ -41,23 +41,23 @@ def _import_bcc():
 
 def _get_addr_interface(addr: IPv4Address):
     """Get network interface name for given IP address"""
-    ipdb = pyroute2.IPDB()
-    for idx, addresses in ipdb.ipaddr.items():
-        for ifaddr, _prefix in addresses:
-            if ip_address(ifaddr) == addr:
-                return ipdb.by_index[idx]['ifname']
+    with pyroute2.IPDB() as ipdb:
+        for idx, addresses in ipdb.ipaddr.items():
+            for ifaddr, _prefix in addresses:
+                if ip_address(ifaddr) == addr:
+                    return ipdb.by_index[idx]['ifname']
     return None
 
 
 def _get_default_interface():
     """Get default network interface"""
-    ip = pyroute2.IPRoute()
-    default_routes = ip.get_default_routes()
-    if default_routes:
-        idx = default_routes[0].get_attr('RTA_OIF')
-        interface = ip.get_links(idx)[0].get_attr('IFLA_IFNAME')
-        return interface
-    raise RuntimeError("Cannot determine default network interface")
+    with pyroute2.IPRoute() as ipr:
+        default_routes = ipr.get_default_routes()
+        if default_routes:
+            idx = default_routes[0].get_attr('RTA_OIF')
+            interface = ipr.get_links(idx)[0].get_attr('IFLA_IFNAME')
+            return interface
+    raise config.ConfigurationError("Cannot determine default network interface")
 
 
 def _collect_server_mappings() -> Tuple[bool, str, List[Tuple[int, int, str]]]:
@@ -86,7 +86,7 @@ def _collect_server_mappings() -> Tuple[bool, str, List[Tuple[int, int, str]]]:
             use_ipport_key = True  # Need IP+port lookup
             server_interface = _get_addr_interface(bind_ip)
             if server_interface is None:
-                raise AssertionError(f"Can't get interface name for {bind_ip}")
+                raise config.ConfigurationError(f"Can't get interface name for {bind_ip}")
 
         if interface is None:
             interface = server_interface
@@ -151,28 +151,44 @@ def _populate_maps(bpf, use_ipport_key: bool, mappings: List[Tuple[int, int, str
         bpf: BCC BPF instance
         use_ipport_key: Whether to use IP+port or port-only map
         mappings: List of (server_port, bind_port, bind_ip) tuples
+
+    Raises:
+        RuntimeError: If map population fails
     """
-    if use_ipport_key:
-        addr_map = bpf.get_table("addr_map")
+    try:
+        if use_ipport_key:
+            addr_map = bpf.get_table("addr_map")
 
-        for server_port, bind_port, bind_ip in mappings:
-            if bind_ip is None:
-                logger.warning(
-                    f"Skipping {server_port}:{bind_port} - no IP for IP+port mode"
-                )
-                continue
+            for server_port, bind_port, bind_ip in mappings:
+                if bind_ip is None:
+                    logger.warning(
+                        f"Skipping {server_port}:{bind_port} - no IP for IP+port mode"
+                    )
+                    continue
 
-            ip_int = _ip_to_int(bind_ip)
-            key = addr_map.Key(ip_int, server_port)
-            addr_map[key] = bind_port
+                try:
+                    ip_int = _ip_to_int(bind_ip)
+                    key = addr_map.Key(ip_int, server_port)
+                    addr_map[key] = bind_port
+                    logger.info(f"  Map: ({bind_ip}:{server_port}) -> {bind_port}")
+                except Exception as e:
+                    logger.error(f"Failed to populate addr_map for {bind_ip}:{server_port}: {e}")
+                    raise RuntimeError(f"Map population failed for {bind_ip}:{server_port}") from e
+        else:
+            port_map = bpf.get_table("port_map")
 
-            logger.info(f"  Map: ({bind_ip}:{server_port}) -> {bind_port}")
-    else:
-        port_map = bpf.get_table("port_map")
-
-        for server_port, bind_port, bind_ip in mappings:
-            port_map[server_port] = bind_port
-            logger.info(f"  Map: {server_port} -> {bind_port}")
+            for server_port, bind_port, bind_ip in mappings:
+                try:
+                    port_map[server_port] = bind_port
+                    logger.info(f"  Map: {server_port} -> {bind_port}")
+                except Exception as e:
+                    logger.error(f"Failed to populate port_map for {server_port}: {e}")
+                    raise RuntimeError(f"Map population failed for {server_port}") from e
+    except Exception as e:
+        if not isinstance(e, RuntimeError):
+            logger.error(f"Unexpected error during map population: {e}")
+            raise RuntimeError("BPF map population failed") from e
+        raise
 
 
 def _attach_tc_bpf(interface: str, bpf, ipr) -> Tuple[int, any, any]:
@@ -351,13 +367,23 @@ async def run_ebpf_redirection():
 
     logger.info("✓ BPF programs attached successfully")
 
-    # Register cleanup handlers
+    # Track cleanup state to avoid double cleanup
+    cleanup_done = False
+
     def cleanup_handler():
+        nonlocal cleanup_done
+        if cleanup_done:
+            return
+        cleanup_done = True
+
         logger.info("Cleaning up tc qdiscs...")
-        _cleanup_tc(ipr, ifindex, safe=True)
-        ipr.close()
+        try:
+            _cleanup_tc(ipr, ifindex, safe=True)
+        finally:
+            ipr.close()
         logger.info("✓ Cleanup complete")
 
+    # Register cleanup for normal exit
     atexit.register(cleanup_handler)
 
     # Register signal handlers for graceful shutdown
@@ -377,9 +403,15 @@ async def run_ebpf_redirection():
     try:
         while True:
             await asyncio.sleep(1)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, asyncio.CancelledError):
         logger.info("Shutting down eBPF redirection...")
-        # Cleanup happens via atexit
+        # Explicit cleanup on interruption
+        cleanup_handler()
+    except Exception as e:
+        logger.error(f"Unexpected error in redirection loop: {e}")
+        cleanup_handler()
+        raise
+    finally:
         logger.info("eBPF redirection stopped")
 
 
