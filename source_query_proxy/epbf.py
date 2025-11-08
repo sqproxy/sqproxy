@@ -175,76 +175,135 @@ def _populate_maps(bpf, use_ipport_key: bool, mappings: List[Tuple[int, int, str
             logger.info(f"  Map: {server_port} -> {bind_port}")
 
 
-def _attach_tc_bpf(interface: str, bpf) -> None:
+def _attach_tc_bpf(interface: str, bpf, ipr) -> Tuple[int, any, any]:
     """Attach BPF programs to tc (traffic control)
+
+    Uses the same approach as sqredirect:
+    - ingress qdisc for incoming traffic
+    - sfq qdisc for outgoing traffic
+    - u32 filters with BPF actions
 
     Args:
         interface: Network interface name
-        bpf: BCC BPF instance with loaded functions
+        bpf: BCC BPF instance with compiled programs
+        ipr: pyroute2 IPRoute instance
+
+    Returns:
+        (ifindex, fn_incoming, fn_outgoing) for cleanup
     """
+    from pyroute2.netlink.exceptions import NetlinkError
+    from pyroute2.netlink.rtnl import protocols
+
     BPF = _import_bcc()
 
-    # Load BPF functions
-    fn_incoming = bpf.load_func("incoming", BPF.SCHED_CLS)
-    fn_outgoing = bpf.load_func("outgoing", BPF.SCHED_CLS)
+    # Load BPF functions (SCHED_ACT mode like sqredirect)
+    fn_incoming = bpf.load_func("incoming", BPF.SCHED_ACT)
+    fn_outgoing = bpf.load_func("outgoing", BPF.SCHED_ACT)
 
     logger.info(f"Loaded BPF functions: incoming={fn_incoming.name}, outgoing={fn_outgoing.name}")
 
-    # Get network interface using pyroute2
-    ip = pyroute2.IPRoute()
-
     # Get interface index
-    idx = ip.link_lookup(ifname=interface)[0]
-    logger.debug(f"Interface {interface} has index {idx}")
+    ifindex = ipr.link_lookup(ifname=interface)[0]
+    logger.debug(f"Interface {interface} has index {ifindex}")
 
-    # Remove any existing qdisc (ignore errors)
+    # Setup incoming traffic hook (ingress qdisc)
     try:
-        ip.tc("del", "clsact", idx)
-        logger.debug("Removed existing clsact qdisc")
-    except Exception:
-        pass  # Expected if no qdisc exists
+        ipr.tc("add", "ingress", ifindex, "ffff:")
+        logger.debug("Added ingress qdisc")
+    except NetlinkError as exc:
+        if exc.args[1] != 'File exists':
+            raise
+        logger.debug("Ingress qdisc already exists")
 
-    # Add clsact qdisc (allows attaching tc BPF programs)
-    ip.tc("add", "clsact", idx)
-    logger.debug("Added clsact qdisc")
-
-    # Attach incoming filter (ingress)
-    # Packets arriving at server_port are redirected to bind_port
-    ip.tc(
+    # Attach incoming BPF filter
+    action_incoming = {
+        "kind": "bpf",
+        "fd": fn_incoming.fd,
+        "name": fn_incoming.name,
+        "action": "ok",
+    }
+    ipr.tc(
         "add-filter",
-        "bpf",
-        idx,
+        "u32",
+        ifindex,
         ":1",
-        fd=fn_incoming.fd,
-        name=fn_incoming.name,
-        parent="ffff:fff2",  # ingress
-        classid=1,
-        direct_action=True,
+        parent="ffff:",
+        action=[action_incoming],
+        protocol=protocols.ETH_P_ALL,
+        target=0x10000,
+        keys=["0x0/0x0+0"],
     )
     logger.info(f"✓ Attached incoming BPF filter to {interface} (ingress)")
 
-    # Attach outgoing filter (egress)
-    # Packets leaving bind_port get source port rewritten to server_port
-    ip.tc(
+    # Setup outgoing traffic hook (sfq qdisc)
+    try:
+        ipr.tc("add", "sfq", ifindex, "1:")
+        logger.debug("Added sfq qdisc")
+    except NetlinkError as exc:
+        if exc.args[1] != 'File exists':
+            raise
+        logger.debug("SFQ qdisc already exists")
+
+    # Attach outgoing BPF filter
+    action_outgoing = {
+        "kind": "bpf",
+        "fd": fn_outgoing.fd,
+        "name": fn_outgoing.name,
+        "action": "ok",
+    }
+    ipr.tc(
         "add-filter",
-        "bpf",
-        idx,
-        ":1",
-        fd=fn_outgoing.fd,
-        name=fn_outgoing.name,
-        parent="ffff:fff3",  # egress
-        classid=1,
-        direct_action=True,
+        "u32",
+        ifindex,
+        ":2",
+        parent="1:",
+        action=[action_outgoing],
+        target=0x10000,
+        keys=["0x0/0x0+0"],
     )
     logger.info(f"✓ Attached outgoing BPF filter to {interface} (egress)")
+
+    return ifindex, fn_incoming, fn_outgoing
+
+
+def _cleanup_tc(ipr, ifindex: int, safe: bool = False):
+    """Cleanup tc qdiscs
+
+    Args:
+        ipr: pyroute2 IPRoute instance
+        ifindex: Interface index
+        safe: If True, ignore 'Invalid argument' errors
+    """
+    from pyroute2.netlink.exceptions import NetlinkError
+
+    try:
+        ipr.tc("del", "ingress", ifindex, "ffff:")
+        logger.debug("Removed ingress qdisc")
+    except NetlinkError as exc:
+        if not safe or exc.args[1] != 'Invalid argument':
+            logger.error(f"Failed to remove ingress qdisc: {exc}")
+            if not safe:
+                raise
+
+    try:
+        ipr.tc("del", "sfq", ifindex, "1:")
+        logger.debug("Removed sfq qdisc")
+    except NetlinkError as exc:
+        if not safe or exc.args[1] != 'Invalid argument':
+            logger.error(f"Failed to remove sfq qdisc: {exc}")
+            if not safe:
+                raise
 
 
 async def run_ebpf_redirection():
     """Main entry point for eBPF redirection
 
     Generates BPF program, compiles it, attaches to network interface,
-    and keeps it running.
+    and keeps it running. Registers cleanup handlers for graceful shutdown.
     """
+    import atexit
+    import signal
+
     logger.info("=== Starting eBPF packet redirection ===")
 
     BPF = _import_bcc()
@@ -278,26 +337,49 @@ async def run_ebpf_redirection():
     _populate_maps(bpf, use_ipport_key, mappings)
     logger.info(f"✓ Populated {len(mappings)} port mappings")
 
+    # Create IPRoute instance for tc operations
+    ipr = pyroute2.IPRoute()
+
     # Attach to tc
     logger.info(f"Attaching BPF programs to interface {interface}...")
     try:
-        _attach_tc_bpf(interface, bpf)
+        ifindex, fn_incoming, fn_outgoing = _attach_tc_bpf(interface, bpf, ipr)
     except Exception as e:
         logger.error(f"Failed to attach BPF programs: {e}")
+        ipr.close()
         raise RuntimeError(f"tc attachment failed: {e}") from e
 
     logger.info("✓ BPF programs attached successfully")
+
+    # Register cleanup handlers
+    def cleanup_handler():
+        logger.info("Cleaning up tc qdiscs...")
+        _cleanup_tc(ipr, ifindex, safe=True)
+        ipr.close()
+        logger.info("✓ Cleanup complete")
+
+    atexit.register(cleanup_handler)
+
+    # Register signal handlers for graceful shutdown
+    def signal_handler(signum, frame):
+        logger.info(f"Received signal {signum}, shutting down...")
+        cleanup_handler()
+        import sys
+        sys.exit(0)
+
+    signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)
+
     logger.info("=== eBPF redirection is active ===")
     logger.info("Press Ctrl+C to stop")
 
     # Keep running until interrupted
-    # The BPF programs will be automatically detached when the process exits
     try:
         while True:
             await asyncio.sleep(1)
     except KeyboardInterrupt:
         logger.info("Shutting down eBPF redirection...")
-        # Cleanup is automatic when bpf object is garbage collected
+        # Cleanup happens via atexit
         logger.info("eBPF redirection stopped")
 
 
