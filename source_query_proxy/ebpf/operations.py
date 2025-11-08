@@ -172,19 +172,20 @@ class PacketRedirectOperation(BPFOperation):
 
         # Redirect port with checksum update
         func.add_code("""
-    // Calculate checksum delta for port change
+    // Store old port for checksum update
     u16 old_port = udph->dest;
-    u16 new_port_val = *new_port;
+    u16 new_port_val = htons(*new_port);
+
+    // Update UDP checksum before modifying port
+    // bpf_l4_csum_replace(skb, offset, from, to, flags)
+    //   offset: offset to checksum field from skb->data
+    //   from/to: old/new value (in network byte order)
+    //   flags: size of value (2 for u16, 4 for u32)
+    long csum_offset = (long)&udph->check - (long)skb->data;
+    bpf_l4_csum_replace(skb, csum_offset, old_port, new_port_val, sizeof(u16));
 
     // Update UDP destination port
-    udph->dest = htons(new_port_val);
-
-    // Recalculate UDP checksum
-    // UDP checksum includes: pseudo-header + UDP header + payload
-    // We only changed dest port, so we update checksum incrementally
-    u32 csum = udph->check;
-    csum = bpf_csum_diff(&old_port, sizeof(old_port), &udph->dest, sizeof(udph->dest), ~csum);
-    udph->check = csum_fold(csum);
+    udph->dest = new_port_val;
 
     return TC_ACT_OK;
 """)
@@ -256,17 +257,16 @@ class PacketRedirectOperation(BPFOperation):
 
         # Rewrite source port with checksum update
         func.add_code("""
-    // Calculate checksum delta for port change
+    // Store old port for checksum update
     u16 old_port = udph->source;
-    u16 original_port_val = *original_port;
+    u16 original_port_val = htons(*original_port);
+
+    // Update UDP checksum before modifying port
+    long csum_offset = (long)&udph->check - (long)skb->data;
+    bpf_l4_csum_replace(skb, csum_offset, old_port, original_port_val, sizeof(u16));
 
     // Update UDP source port
-    udph->source = htons(original_port_val);
-
-    // Recalculate UDP checksum
-    u32 csum = udph->check;
-    csum = bpf_csum_diff(&old_port, sizeof(old_port), &udph->source, sizeof(udph->source), ~csum);
-    udph->check = csum_fold(csum);
+    udph->source = original_port_val;
 
     return TC_ACT_OK;
 """)
