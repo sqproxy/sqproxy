@@ -115,11 +115,8 @@ class TestBPFCompilation:
         assert "#include <uapi/linux/ip.h>" in bpf_code
         assert "#include <uapi/linux/udp.h>" in bpf_code
 
-        # Try to compile (final verification)
-        try:
-            BPF(text=bpf_code, debug=0)
-        except Exception as e:
-            pytest.fail(f"Syntax validation failed: {e}")
+        # Final verification: compile with BCC
+        BPF(text=bpf_code, debug=0)
 
     def test_multiple_ports_same_program(self):
         """Test that we can create a program handling multiple port mappings"""
@@ -133,24 +130,21 @@ class TestBPFCompilation:
 
         bpf_code = program.render()
 
-        try:
-            b = BPF(text=bpf_code, debug=0)
+        # Compile and load the program
+        bpf_instance = BPF(text=bpf_code, debug=0)
 
-            # Test that we can populate the map with multiple entries
-            port_map = b.get_table("port_map")
+        # Test that we can populate the map with multiple entries
+        port_map = bpf_instance.get_table("port_map")
 
-            # Add multiple port mappings
-            port_map[27015] = 27016
-            port_map[27016] = 27017
-            port_map[27017] = 27018
+        # Add multiple port mappings
+        port_map[27015] = 27016
+        port_map[27016] = 27017
+        port_map[27017] = 27018
 
-            # Verify mappings
-            assert port_map[27015].value == 27016
-            assert port_map[27016].value == 27017
-            assert port_map[27017].value == 27018
-
-        except Exception as e:
-            pytest.fail(f"Multi-port test failed: {e}")
+        # Verify mappings
+        assert port_map[27015].value == 27016
+        assert port_map[27016].value == 27017
+        assert port_map[27017].value == 27018
 
     @pytest.mark.parametrize(
         "server_port,bind_port",
@@ -168,15 +162,11 @@ class TestBPFCompilation:
         program.apply_operation(op)
         bpf_code = program.render()
 
-        try:
-            b = BPF(text=bpf_code, debug=0)
-            port_map = b.get_table("port_map")
-            port_map[server_port] = bind_port
-            assert port_map[server_port].value == bind_port
-        except Exception as e:
-            pytest.fail(
-                f"Compilation failed for ports {server_port}->{bind_port}: {e}"
-            )
+        # Compile and test
+        bpf_instance = BPF(text=bpf_code, debug=0)
+        port_map = bpf_instance.get_table("port_map")
+        port_map[server_port] = bind_port
+        assert port_map[server_port].value == bind_port
 
 
 @pytest.mark.skipif(BCC_AVAILABLE, reason="Testing BCC unavailability handling")

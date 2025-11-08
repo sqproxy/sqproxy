@@ -39,7 +39,7 @@ def _import_bcc():
     return _BPF
 
 
-def _get_addr_interface(addr: IPv4Address):
+def _get_addr_interface(addr: IPv4Address) -> Optional[str]:
     """Get network interface name for given IP address"""
     with pyroute2.IPDB() as ipdb:
         for idx, addresses in ipdb.ipaddr.items():
@@ -49,7 +49,7 @@ def _get_addr_interface(addr: IPv4Address):
     return None
 
 
-def _get_default_interface():
+def _get_default_interface() -> str:
     """Get default network interface"""
     with pyroute2.IPRoute() as ipr:
         if default_routes := ipr.get_default_routes():
@@ -142,7 +142,7 @@ def _ip_to_int(ip_str: str) -> int:
     return struct.unpack("!I", socket.inet_aton(ip_str))[0]
 
 
-def _populate_maps(bpf, use_ipport_key: bool, mappings: List[Tuple[int, int, str]]):
+def _populate_maps(bpf, use_ipport_key: bool, mappings: List[Tuple[int, int, Optional[str]]]) -> None:
     """Populate BPF maps with port mappings
 
     Args:
@@ -191,6 +191,39 @@ def _populate_maps(bpf, use_ipport_key: bool, mappings: List[Tuple[int, int, str
     except Exception:
         logger.error(f"Error populating BPF maps:\n{traceback.format_exc()}")
         raise
+
+
+def _rollback_tc_bpf(ipr, ifindex: int, ingress_added: bool, ingress_filter_added: bool, sfq_added: bool) -> None:
+    """Rollback partial tc attachment state on failure
+
+    Args:
+        ipr: pyroute2 IPRoute instance
+        ifindex: Interface index
+        ingress_added: Whether ingress qdisc was added
+        ingress_filter_added: Whether ingress filter was added
+        sfq_added: Whether sfq qdisc was added
+    """
+    # Clean up in reverse order of creation
+    if sfq_added:
+        try:
+            ipr.tc("del", "sfq", ifindex, "1:")
+            logger.debug("Rolled back sfq qdisc")
+        except Exception as cleanup_e:
+            logger.warning(f"Failed to rollback sfq qdisc: {cleanup_e}")
+
+    if ingress_filter_added:
+        try:
+            ipr.tc("del-filter", "u32", ifindex, ":1", parent="ffff:")
+            logger.debug("Rolled back ingress filter")
+        except Exception as cleanup_e:
+            logger.warning(f"Failed to rollback ingress filter: {cleanup_e}")
+
+    if ingress_added:
+        try:
+            ipr.tc("del", "ingress", ifindex, "ffff:")
+            logger.debug("Rolled back ingress qdisc")
+        except Exception as cleanup_e:
+            logger.warning(f"Failed to rollback ingress qdisc: {cleanup_e}")
 
 
 def _attach_tc_bpf(interface: str, bpf, ipr) -> Tuple[int, any, any]:
@@ -298,33 +331,11 @@ def _attach_tc_bpf(interface: str, bpf, ipr) -> Tuple[int, any, any]:
     except Exception as e:
         # Rollback partial state on failure
         logger.error(f"Failed to attach tc bpf, rolling back partial state: {e}")
-
-        # Clean up in reverse order of creation
-        if sfq_added:
-            try:
-                ipr.tc("del", "sfq", ifindex, "1:")
-                logger.debug("Rolled back sfq qdisc")
-            except Exception as cleanup_e:
-                logger.warning(f"Failed to rollback sfq qdisc: {cleanup_e}")
-
-        if ingress_filter_added:
-            try:
-                ipr.tc("del-filter", "u32", ifindex, ":1", parent="ffff:")
-                logger.debug("Rolled back ingress filter")
-            except Exception as cleanup_e:
-                logger.warning(f"Failed to rollback ingress filter: {cleanup_e}")
-
-        if ingress_added:
-            try:
-                ipr.tc("del", "ingress", ifindex, "ffff:")
-                logger.debug("Rolled back ingress qdisc")
-            except Exception as cleanup_e:
-                logger.warning(f"Failed to rollback ingress qdisc: {cleanup_e}")
-
-        raise RuntimeError(f"Failed to attach tc bpf, partial state rolled back") from e
+        _rollback_tc_bpf(ipr, ifindex, ingress_added, ingress_filter_added, sfq_added)
+        raise RuntimeError("Failed to attach tc bpf, partial state rolled back") from e
 
 
-def _cleanup_tc(ipr, ifindex: int, safe: bool = False):
+def _cleanup_tc(ipr, ifindex: int, safe: bool = False) -> None:
     """Cleanup tc qdiscs
 
     Args:
@@ -338,10 +349,8 @@ def _cleanup_tc(ipr, ifindex: int, safe: bool = False):
         ipr.tc("del", "ingress", ifindex, "ffff:")
         logger.debug("Removed ingress qdisc")
     except NetlinkError as exc:
-        if safe and exc.args[1] == 'Invalid argument':
-            # Silently ignore if qdisc doesn't exist
-            pass
-        else:
+        # Only ignore if safe mode and qdisc doesn't exist
+        if not (safe and exc.args[1] == 'Invalid argument'):
             logger.error(f"Failed to remove ingress qdisc: {exc}")
             if not safe:
                 raise
@@ -350,10 +359,8 @@ def _cleanup_tc(ipr, ifindex: int, safe: bool = False):
         ipr.tc("del", "sfq", ifindex, "1:")
         logger.debug("Removed sfq qdisc")
     except NetlinkError as exc:
-        if safe and exc.args[1] == 'Invalid argument':
-            # Silently ignore if qdisc doesn't exist
-            pass
-        else:
+        # Only ignore if safe mode and qdisc doesn't exist
+        if not (safe and exc.args[1] == 'Invalid argument'):
             logger.error(f"Failed to remove sfq qdisc: {exc}")
             if not safe:
                 raise
