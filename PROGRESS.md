@@ -2,11 +2,11 @@
 
 **Branch**: `claude/do-you-rem-011CUvVy31XZaWH6NTswPywk`
 **Issue**: Templating eBPF program
-**Status**: Core implementation complete, ready for review
+**Status**: ✅ IMPLEMENTATION COMPLETE - Ready for testing
 
 ## Summary
 
-Successfully implemented a class-based eBPF template engine to replace the external `sqredirect` dependency. The core template system is complete, tested, and integrated with GitHub CI.
+Successfully implemented a complete eBPF template engine system that replaces the external `sqredirect` dependency. The implementation includes template engine, BCC integration, Docker tests, and full CI/CD pipeline.
 
 ## Commits
 
@@ -40,6 +40,16 @@ Successfully implemented a class-based eBPF template engine to replace the exter
    - Integration tests for BPF compilation
    - GitHub Actions workflow for eBPF tests
    - docker-compose setup for automated testing
+
+7. **e206c1d** - `docs: update PROGRESS.md with Docker/BCC testing infrastructure`
+   - Updated progress documentation
+
+8. **39247ac** - `feat(ebpf): replace sqredirect with template engine integration`
+   - Complete epbf.py rewrite using template engine
+   - Single BPF program for all servers
+   - Runtime map population
+   - BCC compilation and tc attachment
+   - Removed sqredirect subprocess calls
 
 ## What's Implemented ✅
 
@@ -182,26 +192,50 @@ cd tests/docker
 docker-compose -f docker-compose.bpf-test.yml up --build
 ```
 
+### 8. BCC Integration & Production Implementation
+
+**Location**: `source_query_proxy/epbf.py`
+
+Complete rewrite of epbf.py to use template engine instead of sqredirect:
+
+**Architecture**:
+- ✅ `_collect_server_mappings()` - Gather all server configs
+- ✅ `_generate_bpf_program()` - Generate single BPF program using template engine
+- ✅ `_populate_maps()` - Fill BPF maps with all port mappings
+- ✅ `_attach_tc_bpf()` - Attach to tc (traffic control) with pyroute2
+- ✅ `run_ebpf_redirection()` - Main async entry point
+
+**Features**:
+- ✅ **Single BPF program** for all servers (not per-server)
+- ✅ **Runtime map population** - Dynamic configuration
+- ✅ **BCC compilation** - Direct integration, no subprocess
+- ✅ **tc attachment** - Ingress + egress filters
+- ✅ **Auto interface detection** - Supports default and specific interfaces
+- ✅ **Both modes** - Port-only and IP+port lookup
+- ✅ **Error handling** - Helpful messages for missing BCC
+- ✅ **Lazy imports** - BCC imported only when needed
+- ✅ **Backward compatibility** - Keeps get_ebpf_program_run_args() for tests
+
+**Breaking Changes**:
+- ⚠️ Requires BCC installed (`python3-bpfcc`)
+- ⚠️ No longer uses external sqredirect executable
+- ⚠️ config.ebpf.executable and config.ebpf.script_path ignored
+
 ## What's Remaining 🚧
 
-### 1. BCC Integration (High Priority)
-**File**: `source_query_proxy/epbf_new.py` (WIP)
+### 1. Real-World Testing (Critical)
+- [ ] Test with actual game server configuration
+- [ ] Verify packet redirection works (requires root/sudo)
+- [ ] Test with real A2S queries
+- [ ] Performance testing
+- [ ] Multi-server configuration testing
 
-**Need to**:
-- [ ] Generate **single** BPF program for all servers (not per-server)
-- [ ] Populate maps with all port mappings
-- [ ] Compile with BCC
-- [ ] Attach to tc (traffic control) with pyroute2
-- [ ] Test with real BPF loading
-
-**Current issue**: The WIP version generates multiple programs, but we need ONE program with all mappings like the original sqredirect.
-
-### 2. Integration with epbf.py (High Priority)
-- [ ] Replace `get_ebpf_program_run_args()` function
-- [ ] Remove subprocess calls to sqredirect
-- [ ] Use template engine instead
-- [ ] Update config handling
-- [ ] Test with real BCC loading and tc attachment
+### 2. Documentation Updates (High Priority)
+- [ ] Update README.rst (remove sqredirect, document BCC requirement)
+- [ ] Add CHANGELOG entry for v3.0.0 breaking changes
+- [ ] Create migration guide (sqredirect → template engine)
+- [ ] Update installation instructions
+- [ ] Document eBPF requirements and setup
 
 ### 3. Full Integration Tests (Low Priority - Future Work)
 **Partially complete** - BCC compilation tests done, full packet tests remain
@@ -217,12 +251,6 @@ Additional testing that requires kernel privileges:
 - Privileged Docker container
 - Kernel module access
 - Network namespace manipulation
-
-### 4. Documentation Updates (Medium Priority)
-- [ ] Update README.rst (remove sqredirect)
-- [ ] Add usage examples for template engine
-- [ ] Migration guide for users
-- [ ] Update installation requirements (remove sqredirect, ensure BCC)
 
 ## Design Decisions Made
 
@@ -241,10 +269,10 @@ From conversation history:
 **Solved**: Use `bpf_l4_csum_replace(skb, offset, old, new, flags)` instead of manual calculation.
 
 ### 2. Single vs Multiple Programs
-**Unsolved**: Need to refactor epbf_new.py to generate one program with all port mappings populated in the map.
+**Solved**: Generate one BPF program, populate map with all port mappings at runtime in epbf.py.
 
 ### 3. TC Attachment
-**Unsolved**: Complex pyroute2 + BCC integration for tc (traffic control) attachment.
+**Solved**: Implemented pyroute2 + BCC integration in `_attach_tc_bpf()` function.
 
 ## Code Quality
 
@@ -264,7 +292,6 @@ From conversation history:
 - `source_query_proxy/ebpf/elements.py` - BPF elements (struct, map, function)
 - `source_query_proxy/ebpf/operations.py` - PacketRedirectOperation
 - `source_query_proxy/ebpf/program.py` - BPFProgram orchestrator
-- `source_query_proxy/epbf_new.py` - WIP BCC integration
 - `tests/test_ebpf_generation.py` - Unit tests (20+ tests)
 - `tests/test_ebpf_compilation.py` - BCC compilation tests
 - `tests/docker/Dockerfile.bpf-test` - Docker image with BCC
@@ -273,40 +300,48 @@ From conversation history:
 - `.github/workflows/ebpf-tests.yml` - eBPF CI workflow
 
 **Modified**:
+- `source_query_proxy/epbf.py` - Complete rewrite with template engine integration
 - `.github/workflows/tests.yml` - Enhanced with lint job and coverage
 
 **Deleted**:
 - `source_query_proxy/ebpf_template.py` - Replaced by new template engine
 
-## Next Steps for Continuation
+## Next Steps
 
-When ready to continue:
+### For Production Deployment
 
-1. **Fix epbf.py approach** (Critical):
-   - ✅ BCC compilation verified in tests
-   - ✅ Template engine generates valid code
-   - ⚠️ Need single BPF program for all servers (not per-server)
-   - Study original sqredirect architecture
-   - Populate single map with all server port mappings
-   - Integrate with config.py properly
+1. **Real-World Testing** (Critical):
+   - Test with actual game server (CS:GO, CS2, etc.)
+   - Verify BPF program compiles and loads
+   - Test packet redirection with real A2S queries
+   - Monitor performance and resource usage
+   - Test with multiple concurrent servers
 
-2. **Test with real BCC loading**:
-   - Run Docker tests locally to verify
-   - Test tc attachment (requires privileges)
-   - Test map population with multiple ports
-   - Verify incoming/outgoing functions work
+2. **Documentation**:
+   - Update README.rst (remove sqredirect, add BCC requirements)
+   - Create migration guide (sqredirect → template engine)
+   - Document breaking changes for v3.0.0
+   - Add installation guide with eBPF setup
+   - Update troubleshooting section
 
-3. **Full packet redirection tests** (Optional):
-   - Create privileged Docker container
-   - Simulate game server responses
-   - Test actual packet interception
-   - Verify with tcpdump
+3. **Version Bump**:
+   - Update version to 3.0.0 (breaking changes)
+   - Update CHANGELOG.md
+   - Tag release
 
-4. **Documentation**:
-   - Update README.rst (remove sqredirect)
-   - Add usage examples
-   - Migration guide for users
-   - Update installation requirements
+### For Future Enhancement (Optional)
+
+1. **Full Integration Tests**:
+   - Privileged Docker container
+   - Simulated game server with A2S responses
+   - Packet capture verification with tcpdump
+   - Performance benchmarks
+
+2. **Advanced eBPF Features** (from #130, #103, #104):
+   - Rate limiting at kernel level
+   - Whitelist/blacklist management
+   - Fast challenge response
+   - Tail call architecture
 
 ## Questions for Review
 
