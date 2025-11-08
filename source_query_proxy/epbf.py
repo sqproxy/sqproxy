@@ -1,8 +1,15 @@
+"""
+eBPF packet redirection using template engine and BCC
+
+Replaces external sqredirect dependency with internal BPF code generation.
+"""
+
 import asyncio
 import logging
-import os
-from ipaddress import IPv4Address
-from ipaddress import ip_address
+import socket
+import struct
+from ipaddress import IPv4Address, ip_address
+from typing import List, Tuple
 
 import pyroute2
 
@@ -10,8 +17,30 @@ from . import config
 
 logger = logging.getLogger(__name__)
 
+# Lazy import BCC to avoid import errors if not installed
+_bcc_imported = False
+_BPF = None
+
+
+def _import_bcc():
+    """Lazy import of BCC to provide better error messages"""
+    global _bcc_imported, _BPF
+    if not _bcc_imported:
+        try:
+            from bcc import BPF as _BPF_class
+
+            _BPF = _BPF_class
+            _bcc_imported = True
+        except ImportError as e:
+            raise RuntimeError(
+                "BCC (BPF Compiler Collection) is not installed. "
+                "Install it with: apt-get install python3-bpfcc"
+            ) from e
+    return _BPF
+
 
 def _get_addr_interface(addr: IPv4Address):
+    """Get network interface name for given IP address"""
     ipdb = pyroute2.IPDB()
     for idx, addresses in ipdb.ipaddr.items():
         for ifaddr, _prefix in addresses:
@@ -20,18 +49,41 @@ def _get_addr_interface(addr: IPv4Address):
     return None
 
 
-def get_ebpf_program_run_args():  # noqa: C901
-    args = []
+def _get_default_interface():
+    """Get default network interface"""
+    ip = pyroute2.IPRoute()
+    default_routes = ip.get_default_routes()
+    if default_routes:
+        idx = default_routes[0].get_attr('RTA_OIF')
+        interface = ip.get_links(idx)[0].get_attr('IFLA_IFNAME')
+        return interface
+    raise RuntimeError("Cannot determine default network interface")
 
-    is_wide = False
+
+def _collect_server_mappings() -> Tuple[bool, str, List[Tuple[int, int, str]]]:
+    """Collect all server port mappings from config
+
+    Returns:
+        (use_ipport_key, interface, [(server_port, bind_port, bind_ip), ...])
+    """
+    mappings = []
     interface = None
-    for _server_name, server in config.settings.servers:
-        bind_ip = server.network.bind_ip
+    use_ipport_key = False
 
+    for server_name, server in config.settings.servers:
+        if server.network.ebpf_no_redirect:
+            logger.info(f"Skip eBPF redirect for {server_name} (ebpf_no_redirect=true)")
+            continue
+
+        bind_ip = server.network.bind_ip
+        server_port = server.network.server_port
+        bind_port = server.network.bind_port
+
+        # Determine interface
         if str(bind_ip) == '0.0.0.0':
             server_interface = None
-            is_wide = True
         else:
+            use_ipport_key = True  # Need IP+port lookup
             server_interface = _get_addr_interface(bind_ip)
             if server_interface is None:
                 raise AssertionError(f"Can't get interface name for {bind_ip}")
@@ -41,58 +93,237 @@ def get_ebpf_program_run_args():  # noqa: C901
 
         if server_interface != interface:
             raise config.ConfigurationError(
-                'Different interfaces dont supported yet: ' f'{server_interface} != {interface}'
+                f'Different interfaces not supported yet: {server_interface} != {interface}'
             )
 
-        server_port = server.network.server_port
-        bind_port = server.network.bind_port
+        bind_ip_str = None if str(bind_ip) == '0.0.0.0' else str(bind_ip)
+        mappings.append((server_port, bind_port, bind_ip_str))
 
-        if not server.network.ebpf_no_redirect:
-            if is_wide:
-                arg = f'{server_port}:{bind_port}'
-            else:
-                arg = f'{bind_ip}:{server_port}:{bind_port}'
+        logger.debug(f"Server {server_name}: {server_port} -> {bind_port} (ip={bind_ip_str})")
 
-            args += ['-p', arg]
+    if not mappings:
+        raise RuntimeError("No servers configured for eBPF redirection")
 
-    if is_wide:
-        logger.warning("Wide interface is not supported yet. '0.0.0.0' will be interpreted like 'default interface'")
+    # If no interface determined, use default
+    if interface is None:
+        logger.warning(
+            "Wide interface binding (0.0.0.0) detected. Using default interface."
+        )
+        interface = _get_default_interface()
 
-    if interface is not None:
-        args += ['-i', interface]
+    return use_ipport_key, interface, mappings
 
-    return args
+
+def _generate_bpf_program(use_ipport_key: bool) -> str:
+    """Generate BPF C code for packet redirection
+
+    Args:
+        use_ipport_key: If True, use IP+port lookup; otherwise port-only
+
+    Returns:
+        BPF C code as string
+    """
+    from .ebpf import BPFProgram, PacketRedirectOperation
+
+    program = BPFProgram("sqproxy_redirect")
+
+    # Create single redirect operation
+    # We'll populate the maps manually after compilation
+    op = PacketRedirectOperation(
+        server_port=0,  # Dummy, we populate map later
+        bind_port=0,  # Dummy, we populate map later
+        use_ipport_key=use_ipport_key,
+    )
+    program.apply_operation(op)
+
+    return program.render()
+
+
+def _ip_to_int(ip_str: str) -> int:
+    """Convert IP address string to integer (network byte order)"""
+    return struct.unpack("!I", socket.inet_aton(ip_str))[0]
+
+
+def _populate_maps(bpf, use_ipport_key: bool, mappings: List[Tuple[int, int, str]]):
+    """Populate BPF maps with port mappings
+
+    Args:
+        bpf: BCC BPF instance
+        use_ipport_key: Whether to use IP+port or port-only map
+        mappings: List of (server_port, bind_port, bind_ip) tuples
+    """
+    if use_ipport_key:
+        addr_map = bpf.get_table("addr_map")
+
+        for server_port, bind_port, bind_ip in mappings:
+            if bind_ip is None:
+                logger.warning(
+                    f"Skipping {server_port}:{bind_port} - no IP for IP+port mode"
+                )
+                continue
+
+            ip_int = _ip_to_int(bind_ip)
+            key = addr_map.Key(ip_int, server_port)
+            addr_map[key] = bind_port
+
+            logger.info(f"  Map: ({bind_ip}:{server_port}) -> {bind_port}")
+    else:
+        port_map = bpf.get_table("port_map")
+
+        for server_port, bind_port, bind_ip in mappings:
+            port_map[server_port] = bind_port
+            logger.info(f"  Map: {server_port} -> {bind_port}")
+
+
+def _attach_tc_bpf(interface: str, bpf) -> None:
+    """Attach BPF programs to tc (traffic control)
+
+    Args:
+        interface: Network interface name
+        bpf: BCC BPF instance with loaded functions
+    """
+    BPF = _import_bcc()
+
+    # Load BPF functions
+    fn_incoming = bpf.load_func("incoming", BPF.SCHED_CLS)
+    fn_outgoing = bpf.load_func("outgoing", BPF.SCHED_CLS)
+
+    logger.info(f"Loaded BPF functions: incoming={fn_incoming.name}, outgoing={fn_outgoing.name}")
+
+    # Get network interface using pyroute2
+    ip = pyroute2.IPRoute()
+
+    # Get interface index
+    idx = ip.link_lookup(ifname=interface)[0]
+    logger.debug(f"Interface {interface} has index {idx}")
+
+    # Remove any existing qdisc (ignore errors)
+    try:
+        ip.tc("del", "clsact", idx)
+        logger.debug("Removed existing clsact qdisc")
+    except Exception:
+        pass  # Expected if no qdisc exists
+
+    # Add clsact qdisc (allows attaching tc BPF programs)
+    ip.tc("add", "clsact", idx)
+    logger.debug("Added clsact qdisc")
+
+    # Attach incoming filter (ingress)
+    # Packets arriving at server_port are redirected to bind_port
+    ip.tc(
+        "add-filter",
+        "bpf",
+        idx,
+        ":1",
+        fd=fn_incoming.fd,
+        name=fn_incoming.name,
+        parent="ffff:fff2",  # ingress
+        classid=1,
+        direct_action=True,
+    )
+    logger.info(f"✓ Attached incoming BPF filter to {interface} (ingress)")
+
+    # Attach outgoing filter (egress)
+    # Packets leaving bind_port get source port rewritten to server_port
+    ip.tc(
+        "add-filter",
+        "bpf",
+        idx,
+        ":1",
+        fd=fn_outgoing.fd,
+        name=fn_outgoing.name,
+        parent="ffff:fff3",  # egress
+        classid=1,
+        direct_action=True,
+    )
+    logger.info(f"✓ Attached outgoing BPF filter to {interface} (egress)")
 
 
 async def run_ebpf_redirection():
-    executable = config.ebpf.executable
-    if not isinstance(executable, list):
-        executable = [executable]
+    """Main entry point for eBPF redirection
 
-    cwd = None
+    Generates BPF program, compiles it, attaches to network interface,
+    and keeps it running.
+    """
+    logger.info("=== Starting eBPF packet redirection ===")
+
+    BPF = _import_bcc()
+
+    # Collect server configurations
+    logger.info("Collecting server configurations...")
+    use_ipport_key, interface, mappings = _collect_server_mappings()
+
+    logger.info(f"Mode: {'IP+port' if use_ipport_key else 'port-only'}")
+    logger.info(f"Interface: {interface}")
+    logger.info(f"Servers: {len(mappings)}")
+
+    # Generate BPF program
+    logger.info("Generating BPF C code...")
+    bpf_code = _generate_bpf_program(use_ipport_key)
+    logger.debug(f"Generated {len(bpf_code)} bytes of BPF C code")
+
+    # Compile BPF program
+    logger.info("Compiling BPF program with BCC...")
+    try:
+        bpf = BPF(text=bpf_code, debug=0)
+    except Exception as e:
+        logger.error(f"BPF compilation failed: {e}")
+        logger.debug(f"Generated BPF code:\n{bpf_code}")
+        raise RuntimeError(f"BPF compilation failed: {e}") from e
+
+    logger.info("✓ BPF program compiled successfully")
+
+    # Populate maps with port mappings
+    logger.info("Populating BPF maps...")
+    _populate_maps(bpf, use_ipport_key, mappings)
+    logger.info(f"✓ Populated {len(mappings)} port mappings")
+
+    # Attach to tc
+    logger.info(f"Attaching BPF programs to interface {interface}...")
+    try:
+        _attach_tc_bpf(interface, bpf)
+    except Exception as e:
+        logger.error(f"Failed to attach BPF programs: {e}")
+        raise RuntimeError(f"tc attachment failed: {e}") from e
+
+    logger.info("✓ BPF programs attached successfully")
+    logger.info("=== eBPF redirection is active ===")
+    logger.info("Press Ctrl+C to stop")
+
+    # Keep running until interrupted
+    # The BPF programs will be automatically detached when the process exits
+    try:
+        while True:
+            await asyncio.sleep(1)
+    except KeyboardInterrupt:
+        logger.info("Shutting down eBPF redirection...")
+        # Cleanup is automatic when bpf object is garbage collected
+        logger.info("eBPF redirection stopped")
+
+
+# Backward compatibility: keep get_ebpf_program_run_args for tests
+def get_ebpf_program_run_args():
+    """Legacy function for backward compatibility with tests
+
+    This function is deprecated and will be removed in the future.
+    """
+    logger.warning("get_ebpf_program_run_args() is deprecated")
+
+    # Collect mappings using new logic
+    try:
+        use_ipport_key, interface, mappings = _collect_server_mappings()
+    except Exception:
+        return []
+
     args = []
+    for server_port, bind_port, bind_ip in mappings:
+        if bind_ip:
+            arg = f'{bind_ip}:{server_port}:{bind_port}'
+        else:
+            arg = f'{server_port}:{bind_port}'
+        args += ['-p', arg]
 
-    if config.ebpf.script_path is not None:
-        args.append(config.ebpf.script_path.name)
-        cwd = config.ebpf.script_path.parent.as_posix()
+    if interface:
+        args += ['-i', interface]
 
-    args += get_ebpf_program_run_args()
-
-    logger.info('Run %s', executable + args)
-
-    process = await asyncio.create_subprocess_exec(*executable, *args, stdout=asyncio.subprocess.PIPE, cwd=cwd)
-
-    while True:
-        data = await process.stdout.readline()
-        if data:
-            logger.info(data.decode().rstrip())
-
-        if process.stdout.at_eof():
-            break
-
-    retcode = process.returncode
-    if retcode != os.EX_OK:
-        logger.exception('eBPF redirection exit with code %s', retcode)
-        raise RuntimeError
-
-    logger.info('eBPF redirection normally exit with 0 code')
+    return args
