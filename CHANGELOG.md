@@ -1,3 +1,38 @@
+## v3.0.0 (2025-11-09)
+
+### Feat
+
+- **ebpf**: Internal eBPF implementation - replaced external sqredirect dependency with built-in BCC-based solution
+  - New `EBPFRedirector` async lifecycle manager class with start/stop/restart methods
+  - Dynamic reconfiguration support - reload eBPF config without restart
+  - Template engine for generating BPF C code (class-based, Django-style)
+  - Better error handling with exception chaining and detailed diagnostics
+  - Improved logging throughout eBPF lifecycle
+  - Native Python async/await support
+  - See [MIGRATION.md](MIGRATION.md) for migration guide from sqredirect
+
+### BREAKING CHANGE
+
+**None!** This is a drop-in replacement for sqredirect.
+
+- No configuration changes required
+- Same eBPF redirection behavior
+- Existing config files work without modification
+
+### Dependencies
+
+- **Removed**: External `sqredirect` binary
+- **Added**: `python3-bpfcc` (BCC - BPF Compiler Collection)
+
+### Migration
+
+All existing configurations continue to work. Simply:
+1. Install BCC: `apt-get install python3-bpfcc`
+2. Upgrade sqproxy: `pip install --upgrade source-query-proxy`
+3. Restart: `systemctl restart sqproxy`
+
+See [MIGRATION.md](MIGRATION.md) for detailed migration instructions and troubleshooting.
+
 ## v2.5.0 (2023-04-09)
 
 ### Feat
