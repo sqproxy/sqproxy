@@ -89,17 +89,26 @@ class TestBPFMap:
         code = bpf_map.render()
         assert "10240" in code  # Default max_entries
 
+    @staticmethod
+    def _assert_map_renders_as(name, key_type, value_type, map_type, max_entries, expected):
+        """Helper to test map rendering"""
+        bpf_map = BPFMap(name, key_type, value_type, map_type=map_type, max_entries=max_entries)
+        code = bpf_map.render()
+        assert code == expected
+
     def test_different_map_types(self):
         """Test generating maps with different map_type values"""
         # BPF_ARRAY
-        bpf_array = BPFMap("array_map", "u32", "u64", map_type="BPF_ARRAY", max_entries=128)
-        code_array = bpf_array.render()
-        assert code_array == "BPF_ARRAY(array_map, u32, u64, 128);"
+        self._assert_map_renders_as(
+            "array_map", "u32", "u64", "BPF_ARRAY", 128,
+            "BPF_ARRAY(array_map, u32, u64, 128);"
+        )
 
         # BPF_PERCPU_HASH
-        bpf_percpu = BPFMap("percpu_map", "u32", "u64", map_type="BPF_PERCPU_HASH", max_entries=256)
-        code_percpu = bpf_percpu.render()
-        assert code_percpu == "BPF_PERCPU_HASH(percpu_map, u32, u64, 256);"
+        self._assert_map_renders_as(
+            "percpu_map", "u32", "u64", "BPF_PERCPU_HASH", 256,
+            "BPF_PERCPU_HASH(percpu_map, u32, u64, 256);"
+        )
 
     def test_map_with_zero_max_entries(self):
         """Test map with zero max_entries (invalid but not validated)"""

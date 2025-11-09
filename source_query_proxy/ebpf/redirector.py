@@ -140,16 +140,16 @@ class EBPFRedirector:
     async def stop(self):
         """Stop eBPF packet redirection and cleanup resources
 
-        Safe to call multiple times (idempotent).
+        Safe to call multiple times (idempotent). Always cleans up resources
+        even if the redirector was not fully started.
         """
         if not self._running:
-            logger.debug("eBPF redirection is not running, skipping stop")
-            return
+            logger.debug("eBPF redirection is not running, proceeding to cleanup resources")
 
-        logger.info("Stopping eBPF redirection...")
+        logger.info("Stopping eBPF redirection and cleaning up resources...")
         self._running = False
         await self._cleanup()
-        logger.info("✓ eBPF redirection stopped")
+        logger.info("✓ eBPF redirection stopped and resources cleaned up")
 
     async def restart(self):
         """Restart eBPF redirection (stop then start)

@@ -146,6 +146,47 @@ class TestBPFCompilation:
         assert port_map[27016].value == 27017
         assert port_map[27017].value == 27018
 
+    def test_multiple_ipport_mappings_same_program(self):
+        """Test that we can create a program handling multiple IP+port mappings"""
+        from source_query_proxy.ebpf.runtime import ip_to_int
+
+        program = BPFProgram("multi_ipport")
+
+        # Create program with IP+port mode
+        op = PacketRedirectOperation(
+            server_port=27015,
+            bind_port=27016,
+            bind_ip="192.168.1.1",
+            use_ipport_key=True
+        )
+        program.apply_operation(op)
+
+        bpf_code = program.render()
+
+        # Compile and load the program
+        bpf_instance = BPF(text=bpf_code, debug=0)
+
+        # Test that we can populate the addr_map with multiple IP+port entries
+        addr_map = bpf_instance.get_table("addr_map")
+
+        # Add multiple IP+port mappings
+        ip1 = ip_to_int("192.168.1.1")
+        ip2 = ip_to_int("192.168.1.2")
+        ip3 = ip_to_int("10.0.0.1")
+
+        key1 = addr_map.Key(ip1, 27015)
+        key2 = addr_map.Key(ip2, 27015)
+        key3 = addr_map.Key(ip3, 27016)
+
+        addr_map[key1] = 28015
+        addr_map[key2] = 28016
+        addr_map[key3] = 28017
+
+        # Verify mappings
+        assert addr_map[key1].value == 28015
+        assert addr_map[key2].value == 28016
+        assert addr_map[key3].value == 28017
+
     @pytest.mark.parametrize(
         "server_port,bind_port",
         [
@@ -227,12 +268,16 @@ def test_graceful_handling_without_bcc():
     assert "int outgoing" in bpf_code
 
 
-def test_bcc_availability_reporting():
-    """Report whether BCC is available for testing"""
-    if BCC_AVAILABLE:
-        from bcc import BPF
+@pytest.mark.skipif(not BCC_AVAILABLE, reason="BCC not installed")
+def test_bcc_is_available():
+    """Report that BCC is available for testing"""
+    from bcc import BPF
 
-        print(f"\n✓ BCC is available: {BPF.__file__}")
-    else:
-        print("\n✗ BCC is NOT available - compilation tests will be skipped")
-        print("  Install with: apt-get install python3-bpfcc")
+    print(f"\n✓ BCC is available: {BPF.__file__}")
+
+
+@pytest.mark.skipif(BCC_AVAILABLE, reason="BCC is installed")
+def test_bcc_not_available():
+    """Report that BCC is NOT available for testing"""
+    print("\n✗ BCC is NOT available - compilation tests will be skipped")
+    print("  Install with: apt-get install python3-bpfcc")
