@@ -1,98 +1,116 @@
+"""
+eBPF packet redirection - Main entry point
+
+This module provides the main entry point for eBPF-based packet redirection.
+The implementation has been split into smaller modules for better maintainability:
+
+- ebpf/runtime.py: Network helpers, BPF generation, and map population
+- ebpf/tc.py: Traffic control (tc) operations
+- ebpf/redirector.py: EBPFRedirector lifecycle manager
+
+For new code, use EBPFRedirector class directly:
+    from source_query_proxy.ebpf.redirector import EBPFRedirector
+
+    async with EBPFRedirector() as redirector:
+        # eBPF is active
+        await asyncio.Event().wait()
+"""
+
 import asyncio
 import logging
-import os
-from ipaddress import IPv4Address
-from ipaddress import ip_address
+import signal
 
-import pyroute2
-
-from . import config
+from .ebpf.redirector import EBPFRedirector
+from .ebpf.runtime import collect_server_mappings
 
 logger = logging.getLogger(__name__)
 
 
-def _get_addr_interface(addr: IPv4Address):
-    ipdb = pyroute2.IPDB()
-    for idx, addresses in ipdb.ipaddr.items():
-        for ifaddr, _prefix in addresses:
-            if ip_address(ifaddr) == addr:
-                return ipdb.by_index[idx]['ifname']
-    return None
+async def run_ebpf_redirection():
+    """Main entry point for eBPF redirection (legacy compatibility)
+
+    This function provides backward compatibility with the old interface.
+    It runs eBPF redirection until interrupted (Ctrl+C or signal).
+
+    For new code, prefer using EBPFRedirector class directly for better
+    control over lifecycle and support for restart/reload operations.
+
+    Example migration:
+        # Old way (this function)
+        await run_ebpf_redirection()
+
+        # New way (recommended)
+        async with EBPFRedirector() as redirector:
+            # Your application logic here
+            await asyncio.Event().wait()  # Wait forever
+    """
+    redirector = EBPFRedirector()
+    loop = asyncio.get_running_loop()
+
+    # Signal handler for graceful shutdown
+    shutdown_event = asyncio.Event()
+
+    def signal_handler():
+        logger.info("Received shutdown signal, shutting down...")
+        shutdown_event.set()
+
+    # Register signal handlers using asyncio (async-safe)
+    loop.add_signal_handler(signal.SIGTERM, signal_handler)
+    loop.add_signal_handler(signal.SIGINT, signal_handler)
+
+    try:
+        # Start eBPF redirection
+        await redirector.start()
+
+        logger.info("Press Ctrl+C to stop")
+
+        # Wait for shutdown signal
+        await shutdown_event.wait()
+
+    except (KeyboardInterrupt, asyncio.CancelledError):
+        logger.info("Shutting down eBPF redirection...")
+    except Exception as e:
+        logger.error(f"Unexpected error in redirection: {e}")
+        raise
+    finally:
+        # Remove signal handlers
+        loop.remove_signal_handler(signal.SIGTERM)
+        loop.remove_signal_handler(signal.SIGINT)
+        # Always cleanup
+        await redirector.stop()
 
 
-def get_ebpf_program_run_args():  # noqa: C901
+# Backward compatibility: keep get_ebpf_program_run_args for tests
+def get_ebpf_program_run_args():
+    """Legacy function for backward compatibility with tests
+
+    This function is deprecated and will be removed in the future.
+
+    Returns:
+        List of server mapping arguments
+
+    Raises:
+        RuntimeError: If server mappings collection fails
+    """
+    logger.warning("get_ebpf_program_run_args() is deprecated")
+
+    # Collect mappings using new logic
+    try:
+        use_ipport_key, interface, mappings = collect_server_mappings()
+    except Exception as e:
+        logger.error(f"Failed to collect server mappings: {e}", exc_info=True)
+        raise RuntimeError("Failed to collect eBPF program arguments") from e
+
     args = []
-
-    is_wide = False
-    interface = None
-    for _server_name, server in config.settings.servers:
-        bind_ip = server.network.bind_ip
-
-        if str(bind_ip) == '0.0.0.0':
-            server_interface = None
-            is_wide = True
+    for server_port, bind_port, bind_ip in mappings:
+        if bind_ip:
+            arg = f'{bind_ip}:{server_port}:{bind_port}'
         else:
-            server_interface = _get_addr_interface(bind_ip)
-            if server_interface is None:
-                raise AssertionError(f"Can't get interface name for {bind_ip}")
-
-        if interface is None:
-            interface = server_interface
-
-        if server_interface != interface:
-            raise config.ConfigurationError(
-                'Different interfaces dont supported yet: ' f'{server_interface} != {interface}'
-            )
-
-        server_port = server.network.server_port
-        bind_port = server.network.bind_port
-
-        if not server.network.ebpf_no_redirect:
-            if is_wide:
-                arg = f'{server_port}:{bind_port}'
-            else:
-                arg = f'{bind_ip}:{server_port}:{bind_port}'
-
-            args += ['-p', arg]
-
-    if is_wide:
-        logger.warning("Wide interface is not supported yet. '0.0.0.0' will be interpreted like 'default interface'")
-
-    if interface is not None:
-        args += ['-i', interface]
+            arg = f'{server_port}:{bind_port}'
+        args.append(arg)
 
     return args
 
 
-async def run_ebpf_redirection():
-    executable = config.ebpf.executable
-    if not isinstance(executable, list):
-        executable = [executable]
-
-    cwd = None
-    args = []
-
-    if config.ebpf.script_path is not None:
-        args.append(config.ebpf.script_path.name)
-        cwd = config.ebpf.script_path.parent.as_posix()
-
-    args += get_ebpf_program_run_args()
-
-    logger.info('Run %s', executable + args)
-
-    process = await asyncio.create_subprocess_exec(*executable, *args, stdout=asyncio.subprocess.PIPE, cwd=cwd)
-
-    while True:
-        data = await process.stdout.readline()
-        if data:
-            logger.info(data.decode().rstrip())
-
-        if process.stdout.at_eof():
-            break
-
-    retcode = process.returncode
-    if retcode != os.EX_OK:
-        logger.exception('eBPF redirection exit with code %s', retcode)
-        raise RuntimeError
-
-    logger.info('eBPF redirection normally exit with 0 code')
+# Re-export for backward compatibility
+__all__ = ['EBPFRedirector', 'run_ebpf_redirection', 'get_ebpf_program_run_args']

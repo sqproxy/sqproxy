@@ -19,7 +19,7 @@ IPTables (or any NAT) can't help!
 
 If you use IPTables (NAT) to redirect queries to proxy, this rule will be remembered in routing table and if client try to connect - connection will be redirected to proxy too.
 
-We use right way to redirect - eBPF: https://github.com/sqproxy/sqredirect
+We use the right way to redirect - **internal eBPF implementation** using BCC (BPF Compiler Collection)
 
 Prerequisites
 -------------
@@ -33,7 +33,7 @@ Installing
 
 .. code-block:: bash
 
-    pip install source-query-proxy==2.5.0
+    pip install source-query-proxy==3.0.0
 
 Configuring
 -----------
@@ -54,15 +54,30 @@ Run
 Run with eBPF
 -------------
 
-Please read the instruction and install: https://github.com/sqproxy/sqredirect
+sqproxy v3.0.0+ includes **built-in eBPF support** via BCC (no external dependencies needed).
 
-1. Enable eBPF in config (see ``examples/00-globals.yaml``)
-
-2. Run
+1. Install BCC (BPF Compiler Collection):
 
 .. code-block:: bash
 
-    sqproxy run
+    # Ubuntu/Debian
+    sudo apt-get update
+    sudo apt-get install python3-bpfcc linux-headers-$(uname -r)
+
+2. Enable eBPF in config (see ``examples/00-globals.yaml``):
+
+.. code-block:: yaml
+
+    ebpf:
+      enabled: true
+
+3. Run with appropriate privileges (eBPF requires CAP_BPF or CAP_SYS_ADMIN):
+
+.. code-block:: bash
+
+    sudo sqproxy run
+
+For migration from sqredirect (v2.x), see `MIGRATION.md <MIGRATION.md>`_
 
 Run daemonized via systemd
 --------------------------
